@@ -321,7 +321,19 @@ class Context:
 
 
 def is_guidance(rel_path: str) -> bool:
-    return rel_path == GUIDANCE_FILE or rel_path.startswith(GUIDANCE_DIR + "/")
+    if rel_path == GUIDANCE_FILE or rel_path.startswith(GUIDANCE_DIR + "/"):
+        return True
+    # A translation of the home page lives directly beside it, outside
+    # GUIDANCE_DIR (for example ".github/README.zh-CN.md" next to
+    # ".github/README.md") -- tooling-delta.md §1.3, research.md R12. The
+    # language tag is deliberately not hard-coded.
+    home_dir, _, home_name = GUIDANCE_FILE.rpartition("/")
+    path_dir, _, path_name = rel_path.rpartition("/")
+    if path_dir == home_dir:
+        match = TRANSLATION_FILENAME_RE.match(path_name)
+        if match and f"{match.group('id')}.md" == home_name:
+            return True
+    return False
 
 
 def iter_files(root: Path) -> list[str]:
@@ -1079,23 +1091,214 @@ def _heading_lines(text: str) -> list[tuple[int, str]]:
     return out
 
 
-def check_c11(ctx: Context) -> list[str]:
-    """The guidance layer is bilingual and structurally complete."""
-    problems = []
-    checked = 0
-    root = ctx.template_dir
+def _anchor_lines(text: str) -> list[tuple[int, str]]:
+    """Anchor comment lines outside fenced code blocks, as (line number, id)."""
+    out = []
+    in_fence = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = ANCHOR_RE.match(line)
+        if match:
+            out.append((number, match.group(1)))
+    return out
 
+
+def check_c11(ctx: Context) -> list[str]:
+    """The bootstrap-guidance layer's language structure (tooling-delta.md §4 C11).
+
+    Ten assertions, checked independently so a single file can fail more
+    than one of them; every problem names the file and the assertion it
+    violates (language-structure.md, research.md R6).
+    """
+    problems = []
+    root = ctx.template_dir
     home_rel = GUIDANCE_FILE
-    home = root / home_rel
-    if home.is_file() and selected(ctx, home_rel):
-        checked += 1
-        text = read_text(home)
+    setup_rel = f"{GUIDANCE_DIR}/SETUP.md"
+    changelog_rel = f"{GUIDANCE_DIR}/CHANGELOG.md"
+    license_rel = f"{GUIDANCE_DIR}/LICENSE"
+
+    guidance_all = [
+        rel for rel in iter_files(root) if is_guidance(rel) and selected(ctx, rel)
+    ]
+    if not guidance_all:
+        raise SkipCheck(f"no guidance file present (for example {home_rel})")
+
+    guidance_md = [rel for rel in guidance_all if rel.endswith(".md")]
+    translations = {
+        rel: source for rel, source in find_translations(root).items() if selected(ctx, rel)
+    }
+    # Assertion 4: the four files with a fixed, ordered anchor sequence.
+    anchor_key_by_path = {
+        home_rel: "README",
+        ".github/README.zh-CN.md": "README",
+        setup_rel: "SETUP",
+        f"{GUIDANCE_DIR}/SETUP.zh-CN.md": "SETUP",
+    }
+
+    for rel in guidance_md:
+        path = root / rel
+        text = read_text(path)
+        is_translation = rel in translations
+        selector_line = SELECTOR_LINES.get(rel)
+
+        # --- 1. Purity ---------------------------------------------------
+        stripped = strip_for_purity(text, selector_line)
+        if is_translation:
+            run = longest_english_run(stripped)
+            if run >= 6:
+                problems.append(
+                    f"{rel}: purity: longest run of consecutive English words is "
+                    f"{run} (limit is fewer than 6)"
+                )
+        else:
+            count = cjk_count(stripped)
+            if count:
+                problems.append(
+                    f"{rel}: purity: contains {count} CJK character(s) but must "
+                    "be English-only"
+                )
+
+        # --- 2. Language selector -----------------------------------------
         lines = text.splitlines()
-        if not lines or lines[0] != GUIDANCE_HOME_TITLE:
-            problems.append(
-                f"{home_rel}: first line must be {GUIDANCE_HOME_TITLE!r}, "
-                f"found {(lines[0] if lines else '')!r}"
+        if rel in SELECTOR_LINES:
+            expected = SELECTOR_LINES[rel]
+            indices = [i for i, line in enumerate(lines) if line == expected]
+            if not indices:
+                problems.append(
+                    f"{rel}: language selector: missing the verbatim line {expected!r}"
+                )
+            else:
+                if len(indices) > 1:
+                    problems.append(
+                        f"{rel}: language selector: the line {expected!r} appears "
+                        f"{len(indices)} times, expected exactly once"
+                    )
+                h1_index = next(
+                    (i for i, line in enumerate(lines) if line.startswith("# ")), None
+                )
+                if h1_index is None:
+                    problems.append(f"{rel}: language selector: no H1 heading found")
+                elif indices[0] != h1_index + 2 or lines[h1_index + 1].strip() != "":
+                    problems.append(
+                        f"{rel}: language selector: must appear exactly one blank "
+                        "line after the H1 heading"
+                    )
+
+            # --- 3. Mutual reachability ------------------------------------
+            target_match = re.search(r"\(([^)]+)\)", expected)
+            if target_match:
+                target = target_match.group(1)
+                if not (path.parent / target).is_file():
+                    problems.append(
+                        f"{rel}: mutual reachability: language-selector target "
+                        f"does not exist: {target}"
+                    )
+        else:
+            for value in SELECTOR_LINES.values():
+                if value in text:
+                    problems.append(
+                        f"{rel}: language selector: must not contain a "
+                        f"language-selector line: {value!r}"
+                    )
+            for bad in ("](README.zh-CN.md)", "](SETUP.zh-CN.md)"):
+                if bad in text:
+                    problems.append(
+                        f"{rel}: language selector: must not link to a "
+                        f"translation: {bad}"
+                    )
+
+        # --- 4. Anchors ------------------------------------------------
+        anchors = _anchor_lines(text)
+        headings = _heading_lines(text)
+        if rel in anchor_key_by_path:
+            key = anchor_key_by_path[rel]
+            expected_seq = ANCHOR_SEQUENCES[key]
+            actual_seq = [anchor_id for _n, anchor_id in anchors]
+            if actual_seq != expected_seq:
+                problems.append(
+                    f"{rel}: anchors: sequence does not match the {key} "
+                    f"sequence\n    expected: {expected_seq}\n    found:    {actual_seq}"
+                )
+            anchor_line_numbers = {number for number, _id in anchors}
+            for number, heading_text in headings:
+                if (number - 1) not in anchor_line_numbers:
+                    problems.append(
+                        f"{rel}:{number}: anchors: heading has no anchor line "
+                        f"directly above it: {heading_text}"
+                    )
+            if len(anchors) != len(headings):
+                problems.append(
+                    f"{rel}: anchors: anchor count ({len(anchors)}) does not "
+                    f"equal heading count ({len(headings)})"
+                )
+        else:
+            if anchors:
+                found = ", ".join(f"{number}:{anchor_id}" for number, anchor_id in anchors)
+                problems.append(
+                    f"{rel}: anchors: must not contain anchor lines (only README "
+                    f"and SETUP may): {found}"
+                )
+
+        # --- 5. Normative-version notice (translation side) -------------
+        if is_translation:
+            source_name = Path(translations[rel]).name
+            notice = (
+                f"> 英文版是规范版本。本页与 [{source_name}]({source_name}) "
+                "不一致时，以英文版为准。"
             )
+            if notice not in text:
+                problems.append(
+                    f"{rel}: normative notice: missing the verbatim notice: {notice!r}"
+                )
+
+        # --- 7. Single-source markers -------------------------------------
+        if is_translation:
+            for marker in SINGLE_SOURCE_MARKERS:
+                if marker in text:
+                    problems.append(
+                        f"{rel}: single source: must not contain the "
+                        f"single-source marker: {marker!r}"
+                    )
+
+    # --- 5 (English side) ----------------------------------------------
+    for source_rel in TRANSLATED_DOCS:
+        source_path = root / source_rel
+        if not source_path.is_file() or not selected(ctx, source_rel):
+            continue
+        source_name = Path(source_rel).name
+        notice = (
+            f"> 英文版是规范版本。本页与 [{source_name}]({source_name}) "
+            "不一致时，以英文版为准。"
+        )
+        if notice in read_text(source_path):
+            problems.append(
+                f"{source_rel}: normative notice: the English original must not "
+                f"contain the normative-version notice: {notice!r}"
+            )
+
+    # --- 6. Home page: first line is an anchor, second is the title -----
+    if home_rel in guidance_all:
+        lines = read_text(root / home_rel).splitlines()
+        first = lines[0] if lines else ""
+        second = lines[1] if len(lines) > 1 else ""
+        if not ANCHOR_RE.match(first):
+            problems.append(
+                f"{home_rel}: home page: first line must be an anchor line, "
+                f"found {first!r}"
+            )
+        if second != GUIDANCE_HOME_TITLE:
+            problems.append(
+                f"{home_rel}: home page: second line must be "
+                f"{GUIDANCE_HOME_TITLE!r}, found {second!r}"
+            )
+
+        # --- 8. Preserved assertions -------------------------------------
+        text = read_text(root / home_rel)
         for needed in (
             CLEANUP_COMMAND,
             "chefs-pick/SETUP.md",
@@ -1105,61 +1308,22 @@ def check_c11(ctx: Context) -> list[str]:
             if needed not in text:
                 problems.append(f"{home_rel}: missing required string: {needed}")
 
-    # Bilingual headings across every guidance markdown file.
-    for rel in iter_files(root):
-        if not is_guidance(rel) or not rel.endswith(".md"):
-            continue
-        if not selected(ctx, rel):
-            continue
-        if rel != home_rel:
-            checked += 1
-        for number, line in _heading_lines(read_text(root / rel)):
-            if VERSION_HEADING_RE.match(line):
-                continue
-            if not (CJK_RE.search(line) and LATIN_RE.search(line)):
-                problems.append(
-                    f"{rel}:{number}: heading must be bilingual (Chinese and English): {line}"
-                )
-
-    setup_rel = f"{GUIDANCE_DIR}/SETUP.md"
-    setup = root / setup_rel
-    if setup.is_file() and selected(ctx, setup_rel):
-        text = read_text(setup)
-        for index in range(1, 10):
-            token = f"S{index:02d}"
-            if token not in text:
-                problems.append(f"{setup_rel}: missing step {token}")
-        if PLACEHOLDER_TABLE_HEADER not in text:
-            problems.append(
-                f"{setup_rel}: missing the placeholder table header: "
-                f"{PLACEHOLDER_TABLE_HEADER}"
-            )
-
-    guide_rel = f"{GUIDANCE_DIR}/GUIDE.md"
-    guide = root / guide_rel
-    if guide.is_file() and selected(ctx, guide_rel):
-        text = read_text(guide)
-        headings = [line for _n, line in _heading_lines(text)]
-        for index in range(1, 17):
-            token = f"## M{index:02d}"
-            if not any(line.startswith(token) for line in headings):
-                problems.append(f"{guide_rel}: missing heading starting with {token}")
-        for english in GUIDE_EXTRA_HEADINGS:
-            if not any(line.startswith("## ") and english in line for line in headings):
-                problems.append(f"{guide_rel}: missing the '{english}' heading")
-
-    changelog_rel = f"{GUIDANCE_DIR}/CHANGELOG.md"
-    changelog = root / changelog_rel
-    if changelog.is_file() and selected(ctx, changelog_rel):
-        text = read_text(changelog)
+    # --- 9. Template changelog has at least one version heading ---------
+    if changelog_rel in guidance_all:
+        text = read_text(root / changelog_rel)
         if not any(line.startswith("## [") for line in text.splitlines()):
             problems.append(f"{changelog_rel}: no '## [' version heading")
 
-    license_rel = f"{GUIDANCE_DIR}/LICENSE"
-    license_path = root / license_rel
-    if license_path.is_file() and selected(ctx, license_rel):
-        checked += 1
-        lines = read_text(license_path).splitlines()
+    # --- 10. Template LICENSE: purity, then line 3 -----------------------
+    if license_rel in guidance_all:
+        text = read_text(root / license_rel)
+        count = cjk_count(text)
+        if count:
+            problems.append(
+                f"{license_rel}: purity: contains {count} CJK character(s) but "
+                "must be English-only"
+            )
+        lines = text.splitlines()
         expected = "Copyright (c) 2026 Chef's Pick OSS Starter contributors"
         found = lines[2] if len(lines) > 2 else ""
         if found != expected:
@@ -1167,8 +1331,6 @@ def check_c11(ctx: Context) -> list[str]:
                 f"{license_rel}: line 3 must be {expected!r}, found {found!r}"
             )
 
-    if checked == 0:
-        raise SkipCheck(f"no guidance file present (for example {home_rel})")
     return problems
 
 
@@ -1777,7 +1939,7 @@ CHECKS = {
     "C08": ("Placeholders", lambda ctx: check_c08(ctx)),
     "C09": ("Source comments", lambda ctx: check_c09(ctx)),
     "C10": ("Template identity isolation", lambda ctx: check_c10(ctx)),
-    "C11": ("Guidance layer", lambda ctx: check_c11(ctx)),
+    "C11": ("Language structure", lambda ctx: check_c11(ctx)),
     "C12": ("Selection list", lambda ctx: check_c12(ctx)),
     "C13": ("Cleanup simulation", lambda ctx: check_c13(ctx)),
     "C14": ("Relative links", lambda ctx: check_c14(ctx)),
