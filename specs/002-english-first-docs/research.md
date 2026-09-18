@@ -119,7 +119,7 @@ git rm -r .github/README.md .github/README.zh-CN.md .github/chefs-pick
 
 **英文版**：预处理后，中文字符（U+4E00–U+9FFF）数必须为 0。
 
-**中文版**：预处理后，不得出现连续 6 个及以上的英文词。一个"英文词"指 `[A-Za-z][A-Za-z'’-]*`，词之间只隔空格或标点。阈值取 6 是为了放过产品名与专有名词——`GitHub Open Source Guides`（4 词）、`Insights → Community Standards`（3 词）、`Contributor Covenant 2.1`（2 词）都能通过，而一个真正的英文句子几乎不可能短于 6 词。
+**中文版**：预处理后，不得出现连续 6 个及以上的英文词。一个"英文词"指 `[A-Za-z][A-Za-z'’-]*`；两个词之间只出现 `[ \t,.;:!?()'"-]` 中的字符（可重复）时算连续，出现任何其他字符——包括中文、全角标点、以及连续两个及以上换行——即中断。阈值取 6 是为了放过产品名与专有名词——`GitHub Open Source Guides`（4 词）、`Insights → Community Standards`（3 词）、`Contributor Covenant 2.1`（2 词）都能通过，而一个真正的英文句子几乎不可能短于 6 词。
 
 **理由**：中文版里必然出现英文标识符、命令、文件名、产品名与许可证标识（FR-002 已豁免），所以不能简单地"禁止英文字母"。以"连续英文词数"为判据，既能抓住成句的英文，又不会误伤这些必要成分。
 

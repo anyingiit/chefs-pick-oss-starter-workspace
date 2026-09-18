@@ -85,7 +85,7 @@ def longest_english_run(text: str) -> int  # 最长的连续英文词个数，�
 表头常量换成英文（§2）。其余逻辑不变。译本不参与登记表比对——`SETUP.zh-CN.md` 不含登记表是设计要求，不是缺失。
 
 ### C11 语言结构（整体重写，标题改为 `Language structure`）
-对起步引导层的每个 Markdown 文件：
+对起步引导层的每个 Markdown 文件，逐条判定下列断言；任一不满足即 FAIL，且报文必须指名是哪个文件、哪一条断言：
 
 1. **纯度**：`.md` 文件按其 `lang` 判定（§3）。英文版 `cjk_count == 0`；中文版 `longest_english_run < 6`。`LICENSE` 不是 Markdown，单独判定 `cjk_count == 0`。
 2. **语言入口**：路径在 `SELECTOR_LINES` 中的文件，必须恰好包含那一行逐字内容，且它出现在 H1 之后、与 H1 之间恰好一个空行。不在表中的引导层文件，**不得**包含 `SELECTOR_LINES` 的任何一个值，也不得包含 `](README.zh-CN.md)`、`](SETUP.zh-CN.md)` 之类指向译本的链接。
