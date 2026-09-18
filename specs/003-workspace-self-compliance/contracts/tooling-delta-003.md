@@ -27,11 +27,21 @@ repo_root = Path(__file__).resolve().parent.parent
 
 解析路径，**刻意忽略 `ctx.template_dir`**，并在各自的文档字符串中写明这一点，与 `check_c23` 的写法一致。理由见 research R3：工作区首页不在 `template/` 之下。
 
-**跳过条件**：`template/` 不存在、`README.md` 不存在、或 `README.md` 中找不到 `WORKSPACE_SELECTOR_LINES["README.md"]` 那一行时，C25、C26、C27 三者一律抛 `SkipCheck`——与 C23 对缺失契约的处理同口径。判据是**语言入口是否已就位**，即本功能的改造是否已经开始，而不是译本文件是否存在。
+**跳过条件（已修正，见下方「原规则与废弃理由」）**：只有 `template/` 目录本身不存在时，C25、C26、C27 三者才抛 `SkipCheck`——即这压根不是工作区仓库本身，与 C23 对缺失契约的处理同口径。
 
-这一点必须照此实现，不得改成「译本缺失就跳过」：`README.md` 的语言入口指向 `README.zh-CN.md`，若以译本缺失为跳过条件，则译本一旦被误删，三项检查会全部静默失效，而首页上那条指向不存在文件的死链无人发现。语言入口已就位而译本缺失，本就应当判 FAIL。
+`template/` 存在（即这确实是工作区仓库）之后，下列情形一律是 **FAIL**，不是 `SkipCheck`：
 
-代价是改造过程中 `README.md` 已重写、译本尚未建立的那一小段（tasks.md 的 T008 与 T009 之间）整套校验会失败。这是真实的失败状态，不是误报，已写进 tasks.md 的执行约定。
+- `README.md` 不存在——信息形如 `README.md: file does not exist`；
+- `README.md` 存在但找不到 `WORKSPACE_SELECTOR_LINES["README.md"]` 那一行——信息形如 `README.md: language selector: missing the verbatim line '...'`；
+- 语言入口已就位但 `README.zh-CN.md` 不存在——本就应当判 FAIL（见下段），信息必须点名是 `README.zh-CN.md` 缺失。
+
+三者共用的判定逻辑收敛到一个 `_workspace_gate(repo_root)` 辅助函数：只有 `template/` 缺失时它才抛 `SkipCheck`；`README.md` 缺失或缺少选择器行时，它返回一条 FAIL 信息供调用方直接返回，不再继续后续判定项。
+
+译本缺失从来都不是跳过条件，这一点未变：`README.md` 的语言入口指向 `README.zh-CN.md`，若以译本缺失为跳过条件，则译本一旦被误删，三项检查会全部静默失效，而首页上那条指向不存在文件的死链无人发现。语言入口已就位而译本缺失，本就应当判 FAIL。
+
+**原规则与废弃理由**：这一节在 003 功能改造进行中时，跳过条件原本还包含「`README.md` 不存在」与「`README.md` 中找不到选择器行」——判据是「语言入口是否已就位」，即本功能的改造是否已经开始，而不是译本文件是否存在。这是为了让改造过程中 `README.md` 已重写、译本尚未建立的那一小段（tasks.md 的 T008 与 T009 之间）不必整套校验报错，当时这是真实、刻意接受的过渡状态，不是误报。
+
+但改造早已交付，`README.md` 已经带有选择器行；这条规则留到现在，就从「过渡期的迁移便利」变成了一个漏洞——只需删掉或改错 `README.md` 里那一行选择器文字（例如 `**English** · [简体中文](README.zh-CN.md)`），就能让语言结构（C25）、事实准确性（C26）、译文新鲜度（C27）三项检查同时静默跳过、全部不再执行，而 `python3 tools/check_template.py` 仍然报 exit code 0。这不是假设：删掉 `README.md` 里那一行，原本 27 项检查会变成 24 通过、0 失败、0 警告、3 跳过。因此现在把「`README.md` 缺失」与「选择器行缺失」都改判为 FAIL,只把「`template/` 不存在」这一个刻意保留为 `SkipCheck`——它对应的是「这根本不是工作区仓库」，与前两者「这确实是工作区仓库，但结构坏了」性质不同。
 
 ## 3. C25 Workspace language structure
 
@@ -65,7 +75,7 @@ README.zh-CN.md: spec directory 003-workspace-self-compliance is not listed
 
 与 `check_c24` 同构，作用对象换成工作区首页：
 
-- 来源标记缺失、格式不符、或多于一处 → **FAIL**（结构问题）。
+- 来源标记缺失、格式不符、或多于一处 → **FAIL**（结构问题）。「多于一处」按*候选*而非仅按格式正确的标记计数：任何形如 `<!-- translation-of: README.md sha256:... -->` 的行都算一个候选，摘要部分是否是合法的 16 位十六进制不影响它被计入候选数——一条格式正确的标记与一条摘要写错的重复标记并存时，必须判为「找到 2 处标记行」FAIL，而不是只看到那条格式正确的就判过。恰好一个候选时才检验其摘要格式是否合法；不合法同样按「缺失或格式不符」处理。
 - 标记存在且格式正确，但摘要不等于 `README.md` 当前摘要 → **WARN**（`--release` 下 FAIL），信息写成
   `README.zh-CN.md: source marker is stale for README.md (recorded <旧>, current <新>); run python3 tools/check_template.py --update-digests`。
 
