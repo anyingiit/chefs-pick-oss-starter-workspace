@@ -55,7 +55,7 @@ description: "Task list template for feature implementation"
 - [ ] T007 在 `tools/check_template.py` 中把 `check_c12` 的全部字面量改为英文，按 tooling-delta §4 的 C12 条目：八个字段名、级别取值、六种证据类型、`Data verified:`、`## Excluded candidates`、表头首格 `Field`/`Module`/`Candidate`；删去对 `**入选理由**` 的检查只保留 `**Rationale**`；`**备选方案 / Alternatives**` → `**Alternatives**`；规则为 `2` 时正文须含 `comparable adoption`。日期新鲜度逻辑不动。验收：`python3 tools/check_template.py --only C12 | head -1` 输出 `FAIL C12`（模板尚未改造，属预期）。
 - [ ] T008 在 `tools/check_template.py` 中调整 C08、C13、C14、C17、C18、C19、C22 七项，按 tooling-delta §4 对应条目：C08 换英文表头；C13/C22 使用新 `CLEANUP_COMMAND`，被删集合含 `.github/README.md`、`.github/README.zh-CN.md` 与 `.github/chefs-pick/` 整个目录；C14 覆盖两个新文件，带 `#` 的链接只校验文件存在不校验锚点；C17 字面量改 `- Delete:`/`- Update:`/`- What you lose:`；C18 新增两项断言（`## Release gates` 一节须有 6 个有序列表项；全文须含 `--update-digests`）；C19 字面量改英文。验收：`python3 tools/check_template.py --only C08,C13,C14,C17,C18,C19,C22 | tail -1` 能正常输出汇总行（不因异常中断）。
 - [ ] T009 在 `tools/check_template.py` 中新增 `check_c23`（标题 `Contract parity`）与 `check_c24`（标题 `Translation freshness`），并登记进 `CHECKS`，按 tooling-delta §5。C23：比对 `specs/001-chefs-pick-starter/contracts/guidance-layer.md` 与 `template/` 下全部 `.md` 中的 `★ N (owner/repo)`，同一仓库的 `N` 必须相等，不等则报 `owner/repo: contract N1 vs template N2`；只出现在一侧的不报错；契约文件不存在记 SKIP；路径相对仓库根（脚本所在目录的上一级），不受 `--template-dir` 影响。C24：对每份译本读取来源标记，重算英文原文摘要，不等时不带 `--release` 抛 `WarnCheck`、带 `--release` 返回问题列表；缺标记、格式不符、`source` 文件不存在一律 FAIL；无译本记 SKIP。验收：`python3 tools/check_template.py --only C23 | head -1` 输出 `FAIL C23 Contract parity`（12 处漂移尚未修正，属预期）。
-- [ ] T010 [P] 重写 `tools/tests/test_checks_identity.py` 中的 C11 用例，按 tooling-delta §7：覆盖英文版含中文（FAIL）、中文版含 6 个连续英文词（FAIL）、语言入口缺失（FAIL）、入口位置错（FAIL）、非译本文档出现入口（FAIL）、锚点序列与常量不符（FAIL）、锚点数不等于标题数（FAIL）、译本缺规范性声明（FAIL）、译本含 `| Placeholder | Meaning | Files | Example |`（FAIL）、全部合规（PASS）。必须使用 `tools/tests/helpers.py` 既有的临时模板夹具，不得依赖真实 `template/`。验收：`python3 -m unittest tools.tests.test_checks_identity -v 2>&1 | tail -3` 输出 `OK`。
+- [ ] T010 [P] 重写 `tools/tests/test_checks_identity.py` 中的 C11 用例，按 tooling-delta §7：覆盖英文版含中文（FAIL）、中文版含 6 个连续英文词（FAIL）、语言入口缺失（FAIL）、入口位置错（FAIL）、非译本文档出现入口（FAIL）、锚点序列与常量不符（FAIL）、锚点数不等于标题数（FAIL）、译本缺规范性声明（FAIL）、译本含 `| Placeholder | Meaning | Files | Example |`（FAIL）、全部合规（PASS）。必须使用 `tools/tests/helpers.py` 既有的临时模板夹具，不得依赖真实 `template/`。**锚点序列不符的那个用例还必须断言报文内容**：报文须同时含出问题的译本文件名与具体的锚点 id（SC-013 要求"100% 能指名是哪一份译本、哪一个章节锚点"，只断言 FAIL 不够）。验收：`python3 -m unittest tools.tests.test_checks_identity -v 2>&1 | tail -3` 输出 `OK`。
 - [ ] T011 [P] 更新 `tools/tests/test_checks_selection.py`，把 C12 用例的全部双语字面量改为 T007 采用的英文字面量，并新增反例"规则为 2 但 `**Rationale**` 段落不含 `comparable adoption`"（FAIL）。验收：`python3 -m unittest tools.tests.test_checks_selection 2>&1 | tail -3` 输出 `OK`。
 - [ ] T012 [P] 更新 `tools/tests/test_checks_links.py`，按 T008 的新清理命令与新文件集合调整 C13、C14、C17、C22 的夹具与断言；新增用例：清理后仍有文件链接到 `.github/README.zh-CN.md`（FAIL）。验收：`python3 -m unittest tools.tests.test_checks_links 2>&1 | tail -3` 输出 `OK`。
 - [ ] T013 [P] 更新 `tools/tests/test_checks_markers.py`，把 C08 用例的登记表表头改为 `| Placeholder | Meaning | Files | Example |`。验收：`python3 -m unittest tools.tests.test_checks_markers 2>&1 | tail -3` 输出 `OK`。
@@ -114,9 +114,8 @@ description: "Task list template for feature implementation"
 **Independent Test**: 改动英文原文任意一句后运行 `python3 tools/check_template.py` 出现 `WARN C24` 且退出码为 0；加 `--release` 则 `FAIL C24` 且退出码为 1。
 
 - [ ] T031 [US3] 在仓库根运行 `python3 tools/check_template.py --update-digests`，把 `template/.github/README.zh-CN.md` 与 `template/.github/chefs-pick/SETUP.zh-CN.md` 的来源标记从占位值 `sha256:0000000000000000` 刷新为真实摘要。不要手算摘要，也不要手改这两行。验收：`python3 tools/check_template.py --only C24 | head -1` 输出 `PASS C24 Translation freshness`，且再次运行 `--update-digests` 输出 `No digest needed updating.`。
-- [ ] T032 [US3] 在 `template/.github/chefs-pick/MAINTAINING.md` 中新增英文小节 `## Keeping the translations in step`，按 guidance-layer-en §7 第 2 条：说明译本只覆盖 README 与 SETUP 两份文档；改动英文原文后 `python3 tools/check_template.py` 会以 `WARN` 提示哪份译本过期且不影响退出码；更新译文后运行 `python3 tools/check_template.py --update-digests` 刷新来源标记；发布前 `--release` 会把过期译本按 FAIL 处理，对应发布门禁第 6 条。全节用英文书写，不加锚点。验收：`python3 tools/check_template.py --only C18 | head -1` 输出 `PASS C18`。
+- [ ] T032 [US3] 在 `template/.github/chefs-pick/MAINTAINING.md` 中新增英文小节 `## Keeping the translations in step`，按 [contracts/guidance-layer-en.md](./contracts/guidance-layer-en.md) §7 第 2 条：说明译本只覆盖 README 与 SETUP 两份文档；改动英文原文后 `python3 tools/check_template.py` 会以 `WARN` 提示哪份译本过期且不影响退出码；更新译文后运行 `python3 tools/check_template.py --update-digests` 刷新来源标记；发布前 `--release` 会把过期译本按 FAIL 处理，对应发布门禁第 6 条。全节用英文书写，不加锚点。验收：`python3 tools/check_template.py --only C18 | head -1` 输出 `PASS C18`。
 - [ ] T033 [US3] 验证 WARN/FAIL 两条路径确实生效：在 `template/.github/README.md` 的任意一段英文末尾临时追加一个句号，运行 `python3 tools/check_template.py | grep -E '^(WARN|FAIL) C24'` 应出现 `WARN C24` 且 `echo $?` 为 0；再运行 `python3 tools/check_template.py --release | grep -E '^FAIL C24'` 应出现且退出码为 1；随后 `git checkout -- template/.github/README.md` 还原。把三次输出记入 `specs/002-english-first-docs/baseline.md` 的"C24 行为验证"一节。验收：还原后 `git status --short template/` 无输出。
-- [ ] T034 [US3] 在 `specs/001-chefs-pick-starter/contracts/guidance-layer.md` 的 §0「通用规则」中，把"双语写法"整段替换为指向本功能新契约的说明：英文为规范版本、中文以独立译本提供、语言入口与章节锚点的逐字规则见 `specs/002-english-first-docs/contracts/language-structure.md`，§1 ~ §7 的文档结构见 `specs/002-english-first-docs/contracts/guidance-layer-en.md`。同时把 §1 ~ §7 中所有"必须同时含有中文字符和英文字母"一类的双语要求删除。**不要改动 §4.4、§4.5 的数据表**（T020 已处理）。验收：`grep -c '双语写法' specs/001-chefs-pick-starter/contracts/guidance-layer.md` 输出 `0`，且 `python3 tools/check_template.py --only C23 | head -1` 仍输出 `PASS C23`。
 
 ---
 
@@ -126,19 +125,22 @@ description: "Task list template for feature implementation"
 
 **Independent Test**: 按该小节的指引可在空仓库落地一套双语 README，不需要额外查资料；每条建议都点名了采用同一做法的项目。
 
-- [ ] T035 [US4] 在 `template/.github/chefs-pick/GUIDE.md` 中把 `## 中文译本 / Chinese translations` 一节整体替换为 `## Translating your own README`，按 guidance-layer-en §6 的五项要求：(1) 惯例做法——`README.md` 保持英文作为规范版本、另起 `README.zh-CN.md`、顶部放一行语言入口，并给出可直接抄用的两行写法；(2) 依据——点名 dify、RAGFlow、LobeChat、SiYuan、Ant Design、RustDesk，说明这些项目的根 README 都是英文规范版本；(3) 保留原有官方译本链接表，表头改为 `| File | Official Chinese translation |`，四行内容与 URL 不变；(4) 保留"替换译本时保留文件首行来源注释"的提示；(5) 说明这正是本模板自己采用的做法。全节用英文书写。同时把 GUIDE 正文中指向旧锚点 `#中文译本--chinese-translations` 的链接改为 `#translating-your-own-readme`。验收：`python3 tools/check_template.py --only C11,C14 | tail -1` 汇总行无 FAIL。
+- [ ] T034 [US4] 在 `template/.github/chefs-pick/GUIDE.md` 中把 `## 中文译本 / Chinese translations` 一节整体替换为 `## Translating your own README`，按 guidance-layer-en §6 的五项要求：(1) 惯例做法——`README.md` 保持英文作为规范版本、另起 `README.zh-CN.md`、顶部放一行语言入口，并给出可直接抄用的两行写法；(2) 依据——点名 dify、RAGFlow、LobeChat、SiYuan、Ant Design、RustDesk，说明这些项目的根 README 都是英文规范版本；(3) 保留原有官方译本链接表，表头改为 `| File | Official Chinese translation |`，四行内容与 URL 不变；(4) 保留"替换译本时保留文件首行来源注释"的提示；(5) 说明这正是本模板自己采用的做法。全节用英文书写。同时把 GUIDE 正文中指向旧锚点 `#中文译本--chinese-translations` 的链接改为 `#translating-your-own-readme`。验收：`python3 tools/check_template.py --only C11,C14 | tail -1` 汇总行无 FAIL。
 
 ---
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-**Purpose**: 全量收口与回归确认
+**Purpose**: 跨产物一致性收尾、人工验收与全量回归
 
-- [ ] T036 在仓库根运行 `python3 -m unittest discover -s tools/tests`，确认全绿且用例数不少于基线的 199。任一失败则定位到具体检查项修复，不得跳过或删除用例。验收：输出末尾为 `OK`。
-- [ ] T037 在仓库根运行 `python3 tools/check_template.py`，确认末行为 `Summary: 24 passed, 0 failed, 0 warned, 0 skipped`。验收：退出码为 0。
-- [ ] T038 在仓库根运行 `python3 tools/check_template.py --release`，确认退出码为 0 且无 FAIL。验收：`echo $?` 输出 `0`。
-- [ ] T039 按 [quickstart.md](./quickstart.md) 的 A10、A11、A12 三段脚本逐一执行，确认：8 个英文文件 CJK 计数全为 0；两份译本最长英文词串小于 6；四个文件的锚点计数分别为 12、12、3、3；三条单一数据源标记各只出现 1 次。任一不符则回到对应文档任务修复。验收：三段脚本的输出全部符合期望值。
-- [ ] T040 按 quickstart.md §C 执行四项回归确认：`git diff --stat template/ -- ':!*.github/README*' ':!*chefs-pick*'` 无输出（交付给使用者的项目文件未被改动）；`--only C15` PASS；`grep -c '★' template/.github/chefs-pick/SOURCES.md` 与基线相同；`git ls-files template/ | wc -l` 输出 `28`。验收：四项全部符合。
+- [ ] T035 在 `specs/001-chefs-pick-starter/contracts/guidance-layer.md` 的 §0「通用规则」中，把"双语写法"整段替换为指向本功能新契约的说明：英文为规范版本、中文以独立译本提供、语言入口与章节锚点的逐字规则见 `specs/002-english-first-docs/contracts/language-structure.md`，§1 ~ §7 的文档结构见 `specs/002-english-first-docs/contracts/guidance-layer-en.md`。同时把 §1 ~ §7 中所有"必须同时含有中文字符和英文字母"一类的双语要求删除。**不要改动 §4.4、§4.5 的数据表**（T020 已处理）。验收：`grep -c '双语写法' specs/001-chefs-pick-starter/contracts/guidance-layer.md` 输出 `0`，且 `python3 tools/check_template.py --only C23 | head -1` 仍输出 `PASS C23`。
+- [ ] T036 把校验项总数从 22 改为 24、并让汇总行含 `warned` 的表述同步到 6 处陈旧交叉引用：`specs/001-chefs-pick-starter/quickstart.md` 第 19 行（`Summary: 22 passed, 0 failed, 0 skipped` → `Summary: 24 passed, 0 failed, 0 warned, 0 skipped`，括号中的 `21 passed, 0 failed, 1 skipped` → `23 passed, 0 failed, 0 warned, 1 skipped`）、`specs/001-chefs-pick-starter/tasks.md` 第 37 行与第 506 行、`specs/001-chefs-pick-starter/plan.md` 第 40 行与第 64 行（`22 项校验（C01–C22）` → `24 项校验（C01–C24）`）、`specs/001-chefs-pick-starter/contracts/tooling.md` 第 95 行（末句"全部共 22 项"→"全部共 24 项；C23、C24 由功能 002 新增，见 `specs/002-english-first-docs/contracts/tooling-delta.md`"）、以及工作区根 `README.md` 第 24 行（`# 22 项结构校验 / 22 structural checks` → `# 24 项结构校验 / 24 structural checks`）。只改这些数字与汇总行措辞，不动其余内容。验收：`grep -rn '22 passed\|22 项校验\|22 structural checks' specs/001-chefs-pick-starter/ README.md` 无输出。
+- [ ] T037 按 [quickstart.md](./quickstart.md) §B 逐项执行人工验收 V1 ~ V6 与 V10，并把每一项的实际结果记入 `specs/002-english-first-docs/baseline.md` 的"人工验收"一节。这七项是 SC-003、SC-004、SC-010、SC-013 的唯一执行者，自动检查覆盖不到：V1 渲染后看不到 `<!-- anchor:` 与 `<!-- translation-of:`；V2 从英文首页一步到中文首页且能一步返回；V3 通读中文首页无需回查英文；V4 通读英文首页不遇中文散文也无内容缺口；V5 从中文首页点向模块讲解落到英文且无任何提示；V6 一条清理命令执行后 `git grep -n 'chefs-pick'` 无输出；V10 `MAINTAINING.md` 的 `## Release gates` 英文完整列出 6 条且正文的 `gate 2`、`gate 4` 仍指向原来那两条。任一项不符则回到对应文档任务修复，不得标记完成。验收：`baseline.md` 中"人工验收"一节的七项全部记为通过。
+- [ ] T038 在仓库根运行 `python3 -m unittest discover -s tools/tests`，确认全绿且用例数不少于基线的 199。任一失败则定位到具体检查项修复，不得跳过或删除用例。验收：输出末尾为 `OK`。
+- [ ] T039 在仓库根运行 `python3 tools/check_template.py`，确认末行为 `Summary: 24 passed, 0 failed, 0 warned, 0 skipped`。验收：退出码为 0。
+- [ ] T040 在仓库根运行 `python3 tools/check_template.py --release`，确认退出码为 0 且无 FAIL。验收：`echo $?` 输出 `0`。
+- [ ] T041 按 quickstart.md 的 A10、A11、A12 三段脚本逐一执行，确认：8 个英文文件 CJK 计数全为 0；两份译本最长英文词串小于 6；四个文件的锚点计数分别为 12、12、3、3；三条单一数据源标记各只出现 1 次。任一不符则回到对应文档任务修复。验收：三段脚本的输出全部符合期望值。
+- [ ] T042 按 quickstart.md §C 执行四项回归确认：`git diff --stat template/ -- ':!*.github/README*' ':!*chefs-pick*'` 无输出（交付给使用者的项目文件未被改动）；`--only C15` PASS；`grep -c '★' template/.github/chefs-pick/SOURCES.md` 与基线相同；`git ls-files template/ | wc -l` 输出 `28`。验收：四项全部符合。
 
 ---
 
@@ -150,9 +152,9 @@ description: "Task list template for feature implementation"
 - **Phase 2（T002 ~ T020）**：依赖 Phase 1。**阻塞所有用户故事**——校验工具是全部验收命令的基础。
 - **Phase 3（US1，T021 ~ T028）**：依赖 Phase 2。
 - **Phase 4（US2，T029 ~ T030）**：依赖 T021、T022（译本的来源标记必须基于定稿的英文原文）。
-- **Phase 5（US3，T031 ~ T034）**：T031 依赖 T029、T030；T032 依赖 T025；T033 依赖 T031；T034 依赖 T020。
-- **Phase 6（US4，T035）**：依赖 T023（同一文件，串行）。
-- **Phase 7（T036 ~ T040）**：依赖全部前置阶段。
+- **Phase 5（US3，T031 ~ T033）**：T031 依赖 T029、T030；T032 依赖 T025；T033 依赖 T031。
+- **Phase 6（US4，T034）**：依赖 T023（同一文件，串行）。
+- **Phase 7（T035 ~ T042）**：T035 依赖 T020；T036 依赖 T009（C23、C24 登记后总数才是 24）；T037 依赖全部文档任务；T038 ~ T042 依赖其余全部。
 
 ### 用户故事依赖
 
@@ -165,14 +167,16 @@ description: "Task list template for feature implementation"
 
 - `tools/check_template.py`：T002 → T003 → T004 → T005 → T006 → T007 → T008 → T009，**必须串行**。
 - `template/.github/chefs-pick/MAINTAINING.md`：T025 → T032。
-- `template/.github/chefs-pick/GUIDE.md`：T023 → T035。
-- `specs/001-chefs-pick-starter/contracts/guidance-layer.md`：T020 → T034。
+- `template/.github/chefs-pick/GUIDE.md`：T023 → T034。
+- `specs/001-chefs-pick-starter/contracts/guidance-layer.md`：T020 → T035。
+- `specs/002-english-first-docs/baseline.md`：T001 → T033 → T037。
 
 ### 并行机会
 
 - Phase 2 的测试任务：T010、T011、T012、T013、T014、T015、T016、T017、T019 共 9 个，全部不同文件，可同时派给 9 个子代理。
-- Phase 3 的文档任务：T022 ~ T028 共 7 个，全部不同文件，可同时派发（T021 因 C11 的首页断言建议先单独完成）。
+- Phase 3 的文档任务：T022 ~ T028 共 7 个，全部不同文件，可同时派发（T021 建议先单独完成）。
 - Phase 4 的 T030 可与 T029 并行。
+- Phase 7 的 T035、T036 互不相干，可并行。
 
 ```text
 # 示例：Phase 2 测试任务一次性并行派发
@@ -202,8 +206,8 @@ Phase 1 + Phase 2 + Phase 3 = T001 ~ T028。交付后模板仓库首页已是一
 3. **Phase 4（US2）** → 中文侧完成，双语能力恢复。
 4. **Phase 5（US3）** → 防腐机制就位，发布门禁有落点。
 5. **Phase 6（US4）** → 把做法教给使用者。
-6. **Phase 7** → 全量收口。
+6. **Phase 7** → 跨产物一致性收尾、人工验收、全量回归。
 
 ### 任务粒度自检
 
-每个任务都满足：单一文件、无判断题、逐字内容与固定数据就地给出或明确指向契约的某一节、自带可执行的验收命令。T033、T036 ~ T040 是纯验证任务，不改代码，验收即执行本身。
+每个任务都满足：单一文件、无判断题、逐字内容与固定数据就地给出或明确指向契约的某一节、自带可执行的验收命令。T033、T037 ~ T042 是纯验证与同步任务，不改实现代码，验收即执行本身。
