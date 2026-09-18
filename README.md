@@ -1,65 +1,92 @@
-# Chef's Pick OSS Starter — 开发工作区 / Development workspace
+<!-- anchor: chefs-pick-oss-starter-workspace -->
+# Chef's Pick OSS Starter — development workspace
 
-这是 [chefs-pick-oss-starter](https://github.com/anyingiit/chefs-pick-oss-starter) 模板仓库的**开发与维护工作区**：规格、选型调研、校验工具都在这里，模板仓库只承载 `template/` 的内容。
+**English** · [简体中文](README.zh-CN.md)
 
 This is the development and maintenance workspace for the
 [chefs-pick-oss-starter](https://github.com/anyingiit/chefs-pick-oss-starter)
 template repository. The specification, selection research and validation tooling live
 here; the template repository carries only the contents of `template/`.
 
-## 目录结构 / Layout
+<!-- anchor: layout -->
+## Layout
 
-| 路径 | 说明 / What it is | 是否发布 / Published |
+| Path | What it is | Published |
 |---|---|---|
-| `template/` | 模板仓库默认分支的全部内容（26 个文件） / everything on the template repo's default branch | 是 / yes |
-| `specs/001-chefs-pick-starter/` | 规格、计划、任务、调研、契约 / spec, plan, tasks, research, contracts | 否 / no |
-| `tools/` | 校验与数据刷新脚本及其测试 / validation and data-refresh scripts, with tests | 否 / no |
-| `.specify/`、`.claude/` | Spec Kit 与 AI 助手配置 / Spec Kit and AI assistant config | 否 / no |
+| `template/` | Everything on the template repository's default branch | Yes |
+| `specs/001-chefs-pick-starter/` | The original specification, plan, tasks, research and contracts | No |
+| `specs/002-english-first-docs/` | The English-first documentation restructure | No |
+| `specs/003-workspace-self-compliance/` | Holding this workspace to the rules it ships | No |
+| `tools/` | Validation and data-refresh scripts, with their tests | No |
+| `.specify/`, `.claude/` | Spec Kit and AI assistant configuration | No |
 
-**只有 `template/` 会被发布。** 校验项 C02 会拦截任何进入 `template/` 的开发文件。
+`template/` holds 28 files. **Only `template/` is ever published.** Check C02 rejects any
+development file that finds its way into it.
 
-## 常用命令 / Common commands
+<!-- anchor: common-commands -->
+## Common commands
 
 ```bash
-python3 tools/check_template.py              # 24 项结构校验 / 24 structural checks
-python3 tools/check_template.py --release    # 发布门禁（核实日期收紧到 30 天）
-python3 -m unittest discover -s tools/tests  # 单元测试 / unit tests
-python3 tools/verify_sources.py              # 只读复核认可度数据 / dry-run refresh
-python3 tools/verify_sources.py --write      # 写入刷新结果 / write refreshed data
+python3 tools/check_template.py              # 27 structural checks
+python3 tools/check_template.py --release    # release gate; verification dates tighten to 30 days
+python3 tools/check_template.py --update-digests  # refresh translation source markers
+python3 -m unittest discover -s tools/tests  # unit tests
+python3 tools/verify_sources.py              # dry-run refresh of the adoption data
+python3 tools/verify_sources.py --write      # write the refreshed adoption data
 ```
-
-数据刷新需要已登录的 `gh` CLI。复核周期、触发条件和发布门禁见
-`template/.github/chefs-pick/MAINTAINING.md`。
 
 Refreshing adoption data requires an authenticated `gh` CLI. The review cadence,
 re-evaluation triggers and release gates are documented in
 `template/.github/chefs-pick/MAINTAINING.md`.
 
-## 发布 / Publishing
+<!-- anchor: publishing -->
+## Publishing
 
-完整步骤见 [quickstart.md](specs/001-chefs-pick-starter/quickstart.md) 的 B、C、D 三部分。
-把 `template/` 推送到模板仓库：
+Publishing means copying the contents of `template/` onto the default branch of the
+template repository. Nothing else in this workspace is ever published. The full context is
+in parts B, C and D of [quickstart.md](specs/001-chefs-pick-starter/quickstart.md).
 
-The full procedure is in parts B, C and D of
-[quickstart.md](specs/001-chefs-pick-starter/quickstart.md). To push `template/` to the
-template repository:
+Which steps apply depends on whether the template repository already has content.
+
+**First publish, to a newly created empty repository.** Either copy the contents of
+`template/` into a clone of the empty repository and commit, or run:
 
 ```bash
 git subtree split --prefix=template -b publish
-git push <模板仓库远程名 / template remote> publish:main
+git push <template-remote> publish:main
 ```
 
-不要把本工作区的其他目录推送到模板仓库，也不要在模板仓库上直接合并 Dependabot 的合并请求
-（原因见 MAINTAINING 的"动作版本更新"一节）。
+**Every publish after that.** Work in a clone of the template repository and add a commit
+on top of what is already there:
 
-Never push this workspace's other directories to the template repository, and never merge
-Dependabot pull requests on the template repository directly — see the "Action updates"
-section of MAINTAINING for why.
+```bash
+# Subsequent publish: replace the content inside a clone, add one commit
+git -C <clone-path> fetch origin main
+git -C <clone-path> checkout main
+cp -a template/. <clone-path>/
+git -C <clone-path> add -A
+git -C <clone-path> commit -m "docs: sync template content"
+git -C <clone-path> push origin main
+```
 
-## 许可证 / License
+After the copy and before the commit, the clone's working tree should be byte-identical to
+`template/`; `diff -r --exclude=.git <clone-path> template` is the way to confirm it.
 
-MIT，与模板仓库一致。模板自身的许可证与署名说明见
-`template/.github/chefs-pick/LICENSE`。
+Three things to know, because getting them wrong damages the published repository:
+
+- Never force-push to the template repository.
+- A rejected push means the template repository has commits this workspace does not; stop and investigate rather than forcing.
+- `git subtree split` produces a history with no common ancestor with the template repository, so it can only be pushed with `--force`. Use it for the first publish to an empty repository and never afterwards.
+
+That last point is not hypothetical. The template repository carries a `v1.0.0` tag, and
+force-pushing a split history would leave the commit that tag points at unreachable from
+any branch.
+
+Never merge a Dependabot pull request on the template repository directly — see the
+"Action updates" section of MAINTAINING for why.
+
+<!-- anchor: license -->
+## License
 
 MIT, same as the template repository. The template's own license and attribution notes are
 in `template/.github/chefs-pick/LICENSE`.
