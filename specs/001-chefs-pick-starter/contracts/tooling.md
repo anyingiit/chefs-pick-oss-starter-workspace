@@ -83,7 +83,7 @@ python3 tools/check_template.py [--template-dir PATH] [--release] [--today YYYY-
 | C12 | Selection list | 见下方说明 |
 | C13 | Cleanup simulation | 见下方说明 |
 | C14 | Relative links | 见下方说明 |
-| C15 | License | 根目录 `LICENSE` 满足以下条件：第 1 行为 `MIT License`；第 3 行为 `Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER`；包含 `Permission is hereby granted, free of charge`；包含 `THE SOFTWARE IS PROVIDED "AS IS"`；不包含 `[year]` 或 `[fullname]` |
+| C15 | License | 根目录 `LICENSE` 满足以下条件：第 1 行为 `MIT License`；第 3 行为 `Copyright (c) 2026 anyingiit`；包含 `Permission is hereby granted, free of charge`；包含 `THE SOFTWARE IS PROVIDED "AS IS"`；不包含 `[year]` 或 `[fullname]` |
 | C16 | Code of conduct | 满足 project-files M04 中 C16 所列的条件 |
 | C17 | Removal notes | 见下方说明 |
 | C18 | Maintenance guide | `MAINTAINING.md` 包含 guidance-layer §5 列出的 6 个二级标题（按英文部分匹配），其中含 `Action updates` |
@@ -163,7 +163,7 @@ python3 tools/check_template.py [--template-dir PATH] [--release] [--today YYYY-
   - 标题 `## Supported Versions`、`## Reporting a Vulnerability`；
   - 加粗句 `**Please do not report security vulnerabilities through public issues, discussions, or pull requests.**`；
   - `security/advisories/new`；
-  - `CHANGEME_SECURITY_EMAIL`。
+  - `leoycwan@gmail.com`。
 - `CONTRIBUTING.md` 满足以下条件：
   - 依次包含标题 `# Contributing`、`## Code of Conduct`、`## Ways to contribute`、`## Reporting bugs`、`## Suggesting features`、`## Reporting security issues`、`## Submitting pull requests`、`## Development setup`、`## Questions`；
   - 链接到 `CODE_OF_CONDUCT.md`、`SECURITY.md`、`CHANGELOG.md`、`README.md#getting-started`；

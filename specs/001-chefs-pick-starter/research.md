@@ -100,7 +100,7 @@
 
 - **Decision**：采用 **Contributor Covenant 2.1** 英文原文，取自 `EthicalSource/contributor_covenant@7255a28d23d5bc296de2e4e4e9bb5ee1126f1345` 的 `content/version/2/1/code_of_conduct.md`。
   - 去掉站点使用的 TOML front matter（`+++` 包围的部分）。
-  - 把 `[INSERT CONTACT METHOD]` 换成 `CHANGEME_CONDUCT_EMAIL`。
+  - 把 `[INSERT CONTACT METHOD]` 换成 `leoycwan@gmail.com`。
   - 原样保留 Attribution 段落。
   - 适用规则：第 1 级和第 2 级。
 - **Rationale**：
@@ -136,8 +136,8 @@
 
 - **Decision**：采用 GitHub 安全策略加私有漏洞报告，两者都是官方功能。文件包含四部分：
   - 支持版本表。
-  - 私下报告方式：Security 页的 "Report a vulnerability"，并附直达链接 `https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new`。
-  - 备用邮箱 `CHANGEME_SECURITY_EMAIL`。
+  - 私下报告方式：Security 页的 "Report a vulnerability"，并附直达链接 `https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new`。
+  - 备用邮箱 `leoycwan@gmail.com`。
   - 明确要求不要公开提交漏洞。
 
   起步清单把"开启私有漏洞报告"列为必做步骤（F4）。适用规则：第 1 级和第 2 级。
@@ -165,7 +165,7 @@
 
 - **Decision**：
   - 根目录 `CHANGELOG.md` 遵循 Keep a Changelog **1.1.0** 和 SemVer 2.0.0。1.1.0 是当前已发布的版本，2.0.0 仍是未发布草稿（F7）。
-  - 文件只包含 `## [Unreleased]` 一节（附示例条目 "Initial project structure."），以及 `[Unreleased]` 链接 `https://github.com/CHANGEME_OWNER/CHANGEME_REPO/commits/main`。
+  - 文件只包含 `## [Unreleased]` 一节（附示例条目 "Initial project structure."），以及 `[Unreleased]` 链接 `https://github.com/anyingiit/chefs-pick-oss-starter-workspace/commits/main`。
   - `.github/release.yml` 设三个分类：New Features（`enhancement`）、Bug Fixes（`bug`）、Other Changes（`*`）。
 - **适用规则**：第 1 级。
 - **复核触发**：Keep a Changelog 2.0.0 正式发布时。
@@ -222,13 +222,13 @@
   - `rev` 写作 `3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0`。
   - 启用的钩子：`trailing-whitespace`（带 `--markdown-linebreak-ext=md` 参数）、`end-of-file-fixer`、`check-yaml`、`check-merge-conflict`、`check-added-large-files`。
   - 不运行 `pre-commit install` 就没有任何效果。
-- **`.github/CODEOWNERS`**：所有行都是注释（示例为 `# * @CHANGEME_OWNER`），默认不生效。
+- **`.github/CODEOWNERS`**：所有行都是注释（示例为 `# * @anyingiit`），默认不生效。
 - **`.github/FUNDING.yml`**：沿用 GitHub 设置页生成的官方格式，只保留 `github:` 和 `custom:` 两个键，值都留空，因此不会出现赞助按钮。
 
 ### R16 许可证
 
 - **Decision**：
-  - 根目录 `LICENSE`：取 `github/choosealicense.com@58267f8f2c5c0099810849cfd7677f52ae0c0eb3` 中 `_licenses/mit.txt` 的 MIT 原文，去掉 front matter，把 `[year]` 和 `[fullname]` 分别换成 `CHANGEME_YEAR` 和 `CHANGEME_COPYRIGHT_HOLDER`。不加来源注释。
+  - 根目录 `LICENSE`：取 `github/choosealicense.com@58267f8f2c5c0099810849cfd7677f52ae0c0eb3` 中 `_licenses/mit.txt` 的 MIT 原文，去掉 front matter，把 `[year]` 和 `[fullname]` 分别换成 `2026` 和 `anyingiit`。不加来源注释。
   - 模板自身的许可证：放在 `.github/chefs-pick/LICENSE`，采用 MIT，版权人写 "Chef's Pick OSS Starter contributors"，不写个人姓名。
   - 在 `.github/README.md` 和上述 LICENSE 中声明：用本模板生成的项目无需保留模板署名。
 - **Rationale**：满足 FR-010、FR-024 和 FR-036。GitHub 按根目录的 LICENSE 识别出 MIT；模板作者的署名只出现在起步引导层中。

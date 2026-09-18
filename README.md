@@ -1,99 +1,64 @@
-<!-- anchor: chefs-pick-oss-starter-workspace -->
-# Chef's Pick OSS Starter — development workspace
+<!-- Source: Best-README-Template BLANK_README (Unlicense) — https://github.com/othneildrew/Best-README-Template -->
+<a id="readme-top"></a>
 
-**English** · [简体中文](README.zh-CN.md)
+# Chefs Pick Oss Starter Workspace
 
-This is the development and maintenance workspace for the
-[chefs-pick-oss-starter](https://github.com/anyingiit/chefs-pick-oss-starter)
-template repository. The specification, selection research and validation tooling live
-here; the template repository carries only the contents of `template/`.
+This is the development and maintenance workspace for the template repository.
 
-<!-- anchor: layout -->
-## Layout
+[![CI](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/anyingiit/chefs-pick-oss-starter-workspace)](LICENSE)
 
-| Path | What it is | Published |
-|---|---|---|
-| `template/` | Everything on the template repository's default branch | Yes |
-| `specs/001-chefs-pick-starter/` | The original specification, plan, tasks, research and contracts | No |
-| `specs/002-english-first-docs/` | The English-first documentation restructure | No |
-| `specs/003-workspace-self-compliance/` | Holding this workspace to the rules it ships | No |
-| `tools/` | Validation and data-refresh scripts, with their tests | No |
-| `.specify/`, `.claude/` | Spec Kit and AI assistant configuration | No |
+[Report a bug](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=feature_request.yml)
 
-`template/` holds 28 files. **Only `template/` is ever published.** Check C02 rejects any
-development file that finds its way into it.
+<details>
+  <summary>Table of Contents</summary>
+  <ol>
+    <li><a href="#about-the-project">About The Project</a></li>
+    <li><a href="#getting-started">Getting Started</a></li>
+    <li><a href="#usage">Usage</a></li>
+    <li><a href="#contributing">Contributing</a></li>
+    <li><a href="#license">License</a></li>
+    <li><a href="#contact">Contact</a></li>
+  </ol>
+</details>
 
-<!-- anchor: common-commands -->
-## Common commands
+## About The Project
 
-```bash
-python3 tools/check_template.py              # 27 structural checks
-python3 tools/check_template.py --release    # release gate; verification dates tighten to 30 days
-python3 tools/check_template.py --update-digests  # refresh translation source markers
-python3 -m unittest discover -s tools/tests  # unit tests
-python3 tools/verify_sources.py              # dry-run refresh of the adoption data
-python3 tools/verify_sources.py --write      # write the refreshed adoption data
+This is the development and maintenance workspace for the template repository.
+
+See the [open issues](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues) for planned features and known issues.
+
+## Getting Started
+
+### Prerequisites
+
+- Git
+
+### Installation
+
+```sh
+git clone https://github.com/anyingiit/chefs-pick-oss-starter-workspace.git
+cd chefs-pick-oss-starter-workspace
 ```
 
-Refreshing adoption data requires an authenticated `gh` CLI. The review cadence,
-re-evaluation triggers and release gates are documented in
-`template/.github/chefs-pick/MAINTAINING.md`.
+## Usage
 
-<!-- anchor: publishing -->
-## Publishing
-
-Publishing means copying the contents of `template/` onto the default branch of the
-template repository. Nothing else in this workspace is ever published. The full context is
-in parts B, C and D of [quickstart.md](specs/001-chefs-pick-starter/quickstart.md).
-
-Which steps apply depends on whether the template repository already has content.
-
-**First publish, to a newly created empty repository.** Either copy the contents of
-`template/` into a clone of the empty repository and commit, or run:
-
-```bash
-git subtree split --prefix=template -b publish
-git push <template-remote> publish:main
+```sh
+chefs-pick-oss-starter-workspace --help
 ```
 
-**Every publish after that.** Work in a clone of the template repository and add a commit
-on top of what is already there:
+## Contributing
 
-```bash
-# Subsequent publish: replace the content inside a clone, add one commit
-git -C <clone-path> fetch origin main
-git -C <clone-path> checkout -B main origin/main
-git -C <clone-path> rm -rqf .
-cp -a template/. <clone-path>/
-git -C <clone-path> add -A
-diff -r --exclude=.git <clone-path> template
-git -C <clone-path> commit -m "docs: sync template content"
-git -C <clone-path> push origin main
-```
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) for how to open an issue or a pull request, and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for the standards expected of everyone taking part.
 
-Two of those steps are easy to leave out and both cause real damage. `checkout -B main origin/main`
-resets the clone to the published branch, so a clone that is behind cannot build its commit on
-stale history and a clone carrying unrelated local commits cannot push them into the template
-repository. `git rm -rqf .` empties the working tree first, so a file deleted from `template/`
-actually disappears from the publication instead of lingering, and a path that changed between a
-file and a directory does not make the copy fail. The `diff` line is the checkpoint: it must print
-nothing before you commit.
+Please do not report security issues in public issues or pull requests. [SECURITY.md](SECURITY.md) explains how to report them privately.
 
-Three things to know, because getting them wrong damages the published repository:
-
-- Never force-push to the template repository.
-- A rejected push means the template repository has commits this workspace does not; stop and investigate rather than forcing.
-- `git subtree split` produces a history with no common ancestor with the template repository, so it can only be pushed with `--force`. Use it for the first publish to an empty repository and never afterwards.
-
-That last point is not hypothetical. The template repository carries a `v1.0.0` tag, and
-force-pushing a split history would leave the commit that tag points at unreachable from
-any branch.
-
-Never merge a Dependabot pull request on the template repository directly — see the
-"Action updates" section of MAINTAINING for why.
-
-<!-- anchor: license -->
 ## License
 
-MIT, same as the template repository. The template's own license and attribution notes are
-in `template/.github/chefs-pick/LICENSE`.
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
+
+## Contact
+
+Project link: [https://github.com/anyingiit/chefs-pick-oss-starter-workspace](https://github.com/anyingiit/chefs-pick-oss-starter-workspace)
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>

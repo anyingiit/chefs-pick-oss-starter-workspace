@@ -16,15 +16,15 @@ C08 检查要求：项目文件中出现的每个占位符都必须在下表中�
 
 | 占位符 | 含义 / Meaning | 出现的文件（相对 `template/`） | 示例 / Example |
 |---|---|---|---|
-| `CHANGEME_OWNER` | GitHub 用户名或组织名 / GitHub user or organization | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml`、`.github/CODEOWNERS` | `octocat` |
-| `CHANGEME_REPO` | 仓库名 / Repository name | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml` | `hello-world` |
-| `CHANGEME_PROJECT_NAME` | 项目显示名称 / Project display name | `README.md` | `Hello World` |
-| `CHANGEME_PROJECT_DESCRIPTION` | 一句话简介 / One-sentence description | `README.md` | `A tiny tool that says hello.` |
-| `CHANGEME_USAGE_EXAMPLE` | 最简单的使用示例 / Minimal usage example | `README.md` | `hello --name Ada` |
-| `CHANGEME_YEAR` | 版权年份 / Copyright year | `LICENSE` | `2026` |
-| `CHANGEME_COPYRIGHT_HOLDER` | 版权人 / Copyright holder | `LICENSE` | `Ada Lovelace` |
-| `CHANGEME_SECURITY_EMAIL` | 安全问题备用邮箱 / Fallback email for security reports | `SECURITY.md` | `security@example.com` |
-| `CHANGEME_CONDUCT_EMAIL` | 行为准则举报邮箱 / Email for Code of Conduct reports | `CODE_OF_CONDUCT.md` | `conduct@example.com` |
+| `anyingiit` | GitHub 用户名或组织名 / GitHub user or organization | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml`、`.github/CODEOWNERS` | `octocat` |
+| `chefs-pick-oss-starter-workspace` | 仓库名 / Repository name | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml` | `hello-world` |
+| `Chefs Pick Oss Starter Workspace` | 项目显示名称 / Project display name | `README.md` | `Hello World` |
+| `This is the development and maintenance workspace for the template repository.` | 一句话简介 / One-sentence description | `README.md` | `A tiny tool that says hello.` |
+| `chefs-pick-oss-starter-workspace --help` | 最简单的使用示例 / Minimal usage example | `README.md` | `hello --name Ada` |
+| `2026` | 版权年份 / Copyright year | `LICENSE` | `2026` |
+| `anyingiit` | 版权人 / Copyright holder | `LICENSE` | `Ada Lovelace` |
+| `leoycwan@gmail.com` | 安全问题备用邮箱 / Fallback email for security reports | `SECURITY.md` | `security@example.com` |
+| `leoycwan@gmail.com` | 行为准则举报邮箱 / Email for Code of Conduct reports | `CODE_OF_CONDUCT.md` | `conduct@example.com` |
 
 ### 1.3 禁止残留的标记（C08 检查）
 

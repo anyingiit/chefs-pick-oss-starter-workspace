@@ -156,10 +156,10 @@ CONFIG_YML = with_source(
     """blank_issues_enabled: false
 contact_links:
   - name: Questions and help
-    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/discussions
+    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/discussions
     about: Please ask and answer questions in GitHub Discussions.
   - name: Report a security vulnerability
-    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new
+    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new
     about: Please report security vulnerabilities privately, not in public issues.
 """,
 )
@@ -198,7 +198,7 @@ community a harassment-free experience for everyone.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-CHANGEME_CONDUCT_EMAIL. All complaints will be reviewed and investigated
+leoycwan@gmail.com. All complaints will be reviewed and investigated
 promptly and fairly.
 
 ## Attribution
@@ -230,7 +230,7 @@ Security updates are provided for the latest release only.
 
 **Please do not report security vulnerabilities through public issues, discussions, or pull requests.**
 
-Report it privately instead. Open the **Security** tab of this repository and choose **Report a vulnerability**, or go directly to https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new. If private vulnerability reporting is unavailable, email CHANGEME_SECURITY_EMAIL.
+Report it privately instead. Open the **Security** tab of this repository and choose **Report a vulnerability**, or go directly to https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new. If private vulnerability reporting is unavailable, email leoycwan@gmail.com.
 
 Please include:
 
@@ -313,9 +313,9 @@ Closes #
 # Only the part of the README that C20 looks at.
 README_MD = with_source(
     README_PATH,
-    """# CHANGEME_PROJECT_NAME
+    """# Chefs Pick Oss Starter Workspace
 
-[Report a bug](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues/new?template=feature_request.yml)
+[Report a bug](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=feature_request.yml)
 
 ## Getting started
 
@@ -458,7 +458,7 @@ class CheckC04IssueFormsTest(CheckCase):
         config = mutate(
             CONFIG_YML,
             """  - name: Report a security vulnerability
-    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new
+    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new
     about: Please report security vulnerabilities privately, not in public issues.
 """,
             "",
@@ -468,7 +468,7 @@ class CheckC04IssueFormsTest(CheckCase):
     def test_contact_link_outside_the_repository_fails(self):
         config = mutate(
             CONFIG_YML,
-            "url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/discussions",
+            "url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/discussions",
             "url: https://example.com/discussions",
         )
         self.assert_fails(self.forms(config=config))
@@ -542,7 +542,7 @@ class CheckC16CodeOfConductTest(CheckCase):
     def test_contact_placeholder_left_in_fails(self):
         """tasks.md: `[INSERT CONTACT METHOD]` must have been substituted."""
         text = mutate(
-            CODE_OF_CONDUCT_MD, "CHANGEME_CONDUCT_EMAIL", "[INSERT CONTACT METHOD]"
+            CODE_OF_CONDUCT_MD, "leoycwan@gmail.com", "[INSERT CONTACT METHOD]"
         )
         self.assert_fails({COC_PATH: text})
 
@@ -552,7 +552,7 @@ class CheckC16CodeOfConductTest(CheckCase):
 
     def test_missing_changeme_conduct_email_fails(self):
         text = mutate(
-            CODE_OF_CONDUCT_MD, "CHANGEME_CONDUCT_EMAIL", "conduct@example.com"
+            CODE_OF_CONDUCT_MD, "leoycwan@gmail.com", "conduct@example.com"
         )
         self.assert_fails({COC_PATH: text})
 
@@ -615,7 +615,7 @@ class CheckC20ContributorDocumentsTest(CheckCase):
         self.assert_fails(self.docs(security=security))
 
     def test_security_without_email_placeholder_fails(self):
-        security = mutate(SECURITY_MD, "CHANGEME_SECURITY_EMAIL", "security@example.com")
+        security = mutate(SECURITY_MD, "leoycwan@gmail.com", "security@example.com")
         self.assert_fails(self.docs(security=security))
 
     def test_security_without_supported_versions_heading_fails(self):
@@ -660,7 +660,7 @@ class CheckC20ContributorDocumentsTest(CheckCase):
         contributing = mutate(
             CONTRIBUTING_MD,
             "Thanks for your interest in this project.",
-            "Thanks for your interest in CHANGEME_PROJECT_NAME.",
+            "Thanks for your interest in Chefs Pick Oss Starter Workspace.",
         )
         self.assert_fails(self.docs(contributing=contributing))
 

@@ -32,7 +32,7 @@ from helpers import make_ctx, run_one, write_tree  # noqa: E402
 # replaced.  Line 1 is ``MIT License``, line 3 the copyright line.
 MIT_LICENSE = """MIT License
 
-Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER
+Copyright (c) 2026 anyingiit
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -63,9 +63,9 @@ SETUP_MD = (
     + ct.PLACEHOLDER_TABLE_HEADER
     + "\n"
     "|---|---|---|---|\n"
-    "| `CHANGEME_PROJECT_NAME` | 项目名称 / Project name | `README.md` | `my-project` |\n"
-    "| `CHANGEME_YEAR` | 版权年份 / Copyright year | `LICENSE` | `2026` |\n"
-    "| `CHANGEME_COPYRIGHT_HOLDER` | 版权人 / Copyright holder | `LICENSE` | `Ada Lovelace` |\n"
+    "| `Chefs Pick Oss Starter Workspace` | 项目名称 / Project name | `README.md` | `my-project` |\n"
+    "| `2026` | 版权年份 / Copyright year | `LICENSE` | `2026` |\n"
+    "| `anyingiit` | 版权人 / Copyright holder | `LICENSE` | `Ada Lovelace` |\n"
 )
 
 # M12, verbatim from project-files.md; satisfies C06.
@@ -85,7 +85,7 @@ def cleanup_tree() -> dict[str, str]:
     """A template that is clean once the guidance layer is removed (C13)."""
     return {
         "README.md": (
-            "# CHANGEME_PROJECT_NAME\n"
+            "# Chefs Pick Oss Starter Workspace\n"
             "\n"
             "A short description.\n"
             "\n"
@@ -342,7 +342,7 @@ class TestC15License(unittest.TestCase):
     def test_fail_copyright_line_not_placeholderised(self):
         with tempfile.TemporaryDirectory() as tmp:
             text = MIT_LICENSE.replace(
-                "Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER",
+                "Copyright (c) 2026 anyingiit",
                 "Copyright (c) 2026 Example Maintainer",
             )
             root = write_tree(tmp, {"LICENSE": text})
@@ -353,7 +353,7 @@ class TestC15License(unittest.TestCase):
     def test_fail_upstream_brackets_left_in_place(self):
         with tempfile.TemporaryDirectory() as tmp:
             text = MIT_LICENSE.replace(
-                "Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER",
+                "Copyright (c) 2026 anyingiit",
                 "Copyright (c) [year] [fullname]",
             )
             root = write_tree(tmp, {"LICENSE": text})
@@ -509,7 +509,7 @@ class TestC22RemovalSimulation(unittest.TestCase):
                 "blank_issues_enabled: false\n"
                 "contact_links:\n"
                 '  - name: "Code of conduct"\n'
-                '    url: "https://github.com/CHANGEME_GITHUB_OWNER/CHANGEME_REPO_NAME/blob/main/CODE_OF_CONDUCT.md"\n'
+                '    url: "https://github.com/CHANGEME_GITHUB_OWNER/chefs-pick-oss-starter-workspace_NAME/blob/main/CODE_OF_CONDUCT.md"\n'
                 '    about: "Read this before taking part."\n'
             )
             root = write_tree(tmp, files)

@@ -51,7 +51,7 @@ def source_line(rel_path: str) -> str:
 LICENSE_BODY = (
     "MIT License\n"
     "\n"
-    "Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER\n"
+    "Copyright (c) 2026 anyingiit\n"
     "\n"
     'Permission is hereby granted, free of charge, to any person obtaining a copy.\n'
 )
@@ -63,15 +63,15 @@ class TestPlaceholderTableFixture(unittest.TestCase):
     def test_table_round_trips_through_parser(self):
         text = setup_md(
             {
-                "CHANGEME_OWNER": ["README.md", "SECURITY.md"],
-                "CHANGEME_PROJECT_NAME": ["README.md"],
+                "anyingiit": ["README.md", "SECURITY.md"],
+                "Chefs Pick Oss Starter Workspace": ["README.md"],
             }
         )
         self.assertEqual(
             ct.parse_placeholder_registry(text),
             {
-                "CHANGEME_OWNER": {"README.md", "SECURITY.md"},
-                "CHANGEME_PROJECT_NAME": {"README.md"},
+                "anyingiit": {"README.md", "SECURITY.md"},
+                "Chefs Pick Oss Starter Workspace": {"README.md"},
             },
         )
 
@@ -84,12 +84,12 @@ class TestC08Placeholders(unittest.TestCase):
                 {
                     SETUP_PATH: setup_md(
                         {
-                            "CHANGEME_OWNER": ["README.md", "SECURITY.md"],
-                            "CHANGEME_PROJECT_NAME": ["README.md"],
+                            "anyingiit": ["README.md", "SECURITY.md"],
+                            "Chefs Pick Oss Starter Workspace": ["README.md"],
                         }
                     ),
-                    "README.md": "# CHANGEME_PROJECT_NAME\n\nBy CHANGEME_OWNER.\n",
-                    "SECURITY.md": "# Security\n\nSee CHANGEME_OWNER.\n",
+                    "README.md": "# Chefs Pick Oss Starter Workspace\n\nBy anyingiit.\n",
+                    "SECURITY.md": "# Security\n\nSee anyingiit.\n",
                 },
             )
             status, problems = run_one("C08", make_ctx(root))
@@ -101,9 +101,9 @@ class TestC08Placeholders(unittest.TestCase):
                 root,
                 {
                     SETUP_PATH: setup_md(
-                        {"CHANGEME_OWNER": ["README.md", "SECURITY.md"]}
+                        {"anyingiit": ["README.md", "SECURITY.md"]}
                     ),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER.\n",
+                    "README.md": "# Demo\n\nBy anyingiit.\n",
                 },
             )
             status, problems = run_one("C08", make_ctx(root))
@@ -114,8 +114,8 @@ class TestC08Placeholders(unittest.TestCase):
             write_tree(
                 root,
                 {
-                    SETUP_PATH: setup_md({"CHANGEME_OWNER": ["README.md"]}),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER for CHANGEME_MYSTERY.\n",
+                    SETUP_PATH: setup_md({"anyingiit": ["README.md"]}),
+                    "README.md": "# Demo\n\nBy anyingiit for CHANGEME_MYSTERY.\n",
                 },
             )
             status, problems = run_one("C08", make_ctx(root))
@@ -127,8 +127,8 @@ class TestC08Placeholders(unittest.TestCase):
             write_tree(
                 root,
                 {
-                    SETUP_PATH: setup_md({"CHANGEME_OWNER": ["README.md"]}),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER.\n",
+                    SETUP_PATH: setup_md({"anyingiit": ["README.md"]}),
+                    "README.md": "# Demo\n\nBy anyingiit.\n",
                     "CONTRIBUTING.md": (
                         "# Contributing\n\nOpen https://github.com/github_username/x.\n"
                     ),
@@ -143,11 +143,11 @@ class TestC08Placeholders(unittest.TestCase):
             write_tree(
                 root,
                 {
-                    SETUP_PATH: setup_md({"CHANGEME_OWNER": ["README.md"]}),
+                    SETUP_PATH: setup_md({"anyingiit": ["README.md"]}),
                     GUIDE_PATH: (
-                        "# 模块讲解 / Module guide\n\n把 CHANGEME_OWNER 换成你的账号。\n"
+                        "# 模块讲解 / Module guide\n\n把 anyingiit 换成你的账号。\n"
                     ),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER.\n",
+                    "README.md": "# Demo\n\nBy anyingiit.\n",
                 },
             )
             status, problems = run_one("C08", make_ctx(root))
@@ -160,9 +160,9 @@ class TestC08Placeholders(unittest.TestCase):
                 root,
                 {
                     SETUP_PATH: setup_md(
-                        {"CHANGEME_OWNER": ["README.md", "SECURITY.md"]}
+                        {"anyingiit": ["README.md", "SECURITY.md"]}
                     ),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER.\n",
+                    "README.md": "# Demo\n\nBy anyingiit.\n",
                     # SECURITY.md exists but never uses the placeholder.
                     "SECURITY.md": "# Security\n\nNothing to see here.\n",
                 },
@@ -178,9 +178,9 @@ class TestC08Placeholders(unittest.TestCase):
                 root,
                 {
                     SETUP_PATH: setup_md(
-                        {"CHANGEME_OWNER": ["README.md", "SECURITY.md"]}
+                        {"anyingiit": ["README.md", "SECURITY.md"]}
                     ),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER.\n",
+                    "README.md": "# Demo\n\nBy anyingiit.\n",
                     "SECURITY.md": "# Security\n\nNothing to see here.\n",
                 },
             )
@@ -194,8 +194,8 @@ class TestC08Placeholders(unittest.TestCase):
             write_tree(
                 root,
                 {
-                    SETUP_PATH: setup_md({"CHANGEME_OWNER": ["README.md"]}),
-                    "README.md": "# Demo\n\nBy CHANGEME_OWNER for CHANGEME_MYSTERY.\n",
+                    SETUP_PATH: setup_md({"anyingiit": ["README.md"]}),
+                    "README.md": "# Demo\n\nBy anyingiit for CHANGEME_MYSTERY.\n",
                 },
             )
             status, problems = run_one(
@@ -206,7 +206,7 @@ class TestC08Placeholders(unittest.TestCase):
 
     def test_skip_without_setup_md(self):
         with tempfile.TemporaryDirectory() as root:
-            write_tree(root, {"README.md": "# Demo\n\nBy CHANGEME_OWNER.\n"})
+            write_tree(root, {"README.md": "# Demo\n\nBy anyingiit.\n"})
             status, _reason = run_one("C08", make_ctx(root))
             self.assertEqual(status, "SKIP")
 

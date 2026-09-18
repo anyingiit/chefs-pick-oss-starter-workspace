@@ -1,14 +1,14 @@
 <!-- Source: Best-README-Template BLANK_README (Unlicense) — https://github.com/othneildrew/Best-README-Template -->
 <a id="readme-top"></a>
 
-# CHANGEME_PROJECT_NAME
+# Chefs Pick Oss Starter Workspace
 
-CHANGEME_PROJECT_DESCRIPTION
+This is the development and maintenance workspace for the template repository.
 
-[![CI](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/CHANGEME_OWNER/CHANGEME_REPO)](LICENSE)
+[![CI](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/actions/workflows/ci.yml)
+[![License](https://img.shields.io/github/license/anyingiit/chefs-pick-oss-starter-workspace)](LICENSE)
 
-[Report a bug](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues/new?template=feature_request.yml)
+[Report a bug](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=bug_report.yml) · [Request a feature](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=feature_request.yml)
 
 <details>
   <summary>Table of Contents</summary>
@@ -24,9 +24,9 @@ CHANGEME_PROJECT_DESCRIPTION
 
 ## About The Project
 
-CHANGEME_PROJECT_DESCRIPTION
+This is the development and maintenance workspace for the template repository.
 
-See the [open issues](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues) for planned features and known issues.
+See the [open issues](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues) for planned features and known issues.
 
 ## Getting Started
 
@@ -37,14 +37,14 @@ See the [open issues](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues) fo
 ### Installation
 
 ```sh
-git clone https://github.com/CHANGEME_OWNER/CHANGEME_REPO.git
-cd CHANGEME_REPO
+git clone https://github.com/anyingiit/chefs-pick-oss-starter-workspace.git
+cd chefs-pick-oss-starter-workspace
 ```
 
 ## Usage
 
 ```sh
-CHANGEME_USAGE_EXAMPLE
+chefs-pick-oss-starter-workspace --help
 ```
 
 ## Contributing
@@ -59,6 +59,6 @@ Distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## Contact
 
-Project link: [https://github.com/CHANGEME_OWNER/CHANGEME_REPO](https://github.com/CHANGEME_OWNER/CHANGEME_REPO)
+Project link: [https://github.com/anyingiit/chefs-pick-oss-starter-workspace](https://github.com/anyingiit/chefs-pick-oss-starter-workspace)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>

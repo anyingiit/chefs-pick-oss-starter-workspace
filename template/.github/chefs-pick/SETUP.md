@@ -12,15 +12,15 @@ The table below registers every placeholder in the template. Replace each one wi
 
 | Placeholder | Meaning | Files | Example |
 |---|---|---|---|
-| `CHANGEME_OWNER` | GitHub user or organization | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml`、`.github/CODEOWNERS` | `octocat` |
-| `CHANGEME_REPO` | Repository name | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml` | `hello-world` |
-| `CHANGEME_PROJECT_NAME` | Project display name | `README.md` | `Hello World` |
-| `CHANGEME_PROJECT_DESCRIPTION` | One-sentence description | `README.md` | `A tiny tool that says hello.` |
-| `CHANGEME_USAGE_EXAMPLE` | Minimal usage example | `README.md` | `hello --name Ada` |
-| `CHANGEME_YEAR` | Copyright year | `LICENSE` | `2026` |
-| `CHANGEME_COPYRIGHT_HOLDER` | Copyright holder | `LICENSE` | `Ada Lovelace` |
-| `CHANGEME_SECURITY_EMAIL` | Fallback email for security reports | `SECURITY.md` | `security@example.com` |
-| `CHANGEME_CONDUCT_EMAIL` | Email for Code of Conduct reports | `CODE_OF_CONDUCT.md` | `conduct@example.com` |
+| `anyingiit` | GitHub user or organization | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml`、`.github/CODEOWNERS` | `octocat` |
+| `chefs-pick-oss-starter-workspace` | Repository name | `README.md`、`SECURITY.md`、`CHANGELOG.md`、`.github/ISSUE_TEMPLATE/config.yml` | `hello-world` |
+| `Chefs Pick Oss Starter Workspace` | Project display name | `README.md` | `Hello World` |
+| `This is the development and maintenance workspace for the template repository.` | One-sentence description | `README.md` | `A tiny tool that says hello.` |
+| `chefs-pick-oss-starter-workspace --help` | Minimal usage example | `README.md` | `hello --name Ada` |
+| `2026` | Copyright year | `LICENSE` | `2026` |
+| `anyingiit` | Copyright holder | `LICENSE` | `Ada Lovelace` |
+| `leoycwan@gmail.com` | Fallback email for security reports | `SECURITY.md` | `security@example.com` |
+| `leoycwan@gmail.com` | Email for Code of Conduct reports | `CODE_OF_CONDUCT.md` | `conduct@example.com` |
 
 Before you remove the guide layer, use this command to find the placeholders you have not replaced yet. It excludes the registry table on this page, so the table itself is not counted.
 
