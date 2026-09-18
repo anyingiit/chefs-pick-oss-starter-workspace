@@ -11,6 +11,7 @@ import argparse
 import datetime as _dt
 import hashlib
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -287,6 +288,19 @@ ANCHOR_SEQUENCES = {  # language-structure.md §3
 }
 SINGLE_SOURCE_MARKERS = ["| Placeholder | Meaning | Files | Example |",
                          "<!-- summary:start -->", "<!-- adoption-data:start -->"]
+
+# tooling-delta-003.md §1 -- workspace-structure.md §1, §2-derived constants
+# for the workspace homepage (README.md), which lives outside template/.
+WORKSPACE_SOURCE = "README.md"
+WORKSPACE_TRANSLATION = "README.zh-CN.md"
+WORKSPACE_SELECTOR_LINES = {
+    "README.md": "**English** · [简体中文](README.zh-CN.md)",
+    "README.zh-CN.md": "[English](README.md) · **简体中文**",
+}
+WORKSPACE_ANCHOR_SEQUENCE = [
+    "chefs-pick-oss-starter-workspace", "layout",
+    "common-commands", "publishing", "license",
+]
 
 # Translation filenames: "<id>.<lang>.md" with a sibling "<id>.md" in the
 # same directory (tooling-delta.md §1.3, research.md R12). The language
@@ -2063,29 +2077,29 @@ def check_c24(ctx: Context) -> list[str]:
         source_name = Path(source_rel).name
         text = read_text(root / translation_rel)
 
-        digest_matches = []
-        for line in text.splitlines():
-            match = DIGEST_RE.match(line)
-            if match and match.group(1) == source_name:
-                digest_matches.append(match)
+        # Count marker *candidates*, not only well-formed ones: a valid
+        # marker sitting next to a malformed duplicate for the same source
+        # used to read as exactly one marker here, so the duplicate passed
+        # unnoticed while --update-digests refused the same file. The two
+        # now agree. See ``_marker_candidates``.
+        candidates = _marker_candidates(text, source_name)
 
-        if not digest_matches:
+        if len(candidates) > 1:
+            problems.append(
+                f"{translation_rel}: found {len(candidates)} source "
+                f"marker lines for {source_name} (expected exactly one line "
+                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
+            )
+            continue
+
+        digest_match = DIGEST_RE.match(candidates[0].group(0)) if candidates else None
+        if digest_match is None or digest_match.group(1) != source_name:
             problems.append(
                 f"{translation_rel}: missing or malformed source marker for "
                 f"{source_name} (expected exactly one line "
                 f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
             )
             continue
-
-        if len(digest_matches) > 1:
-            problems.append(
-                f"{translation_rel}: found {len(digest_matches)} source "
-                f"marker lines for {source_name} (expected exactly one line "
-                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
-            )
-            continue
-
-        digest_match = digest_matches[0]
 
         source_path = root / source_rel
         if not source_path.is_file():
@@ -2113,6 +2127,418 @@ def check_c24(ctx: Context) -> list[str]:
     return []
 
 
+def _workspace_gate(repo_root: Path) -> tuple[str | None, str | None, list[str]]:
+    """Resolve README.md / README.zh-CN.md for C25/C26/C27's shared gate.
+
+    tooling-delta-003.md §2 (corrected -- see Finding 2 in
+    tooling-delta-003.md §2 for the full rationale): the *only* condition
+    under which C25, C26 and C27 raise ``SkipCheck`` is ``template/`` not
+    existing at all -- i.e. this is not the workspace repository. A
+    missing ``README.md``, or one that lacks the verbatim
+    ``WORKSPACE_SELECTOR_LINES["README.md"]`` line, is a structural FAIL,
+    never a skip: skipping either of those let a single deleted or
+    misspelled line silently turn off all three checks.
+
+    Returns ``(source_text, translation_text, problems)``. When the gate
+    itself fails, ``source_text`` is ``None`` and ``problems`` already
+    holds the one FAIL message naming what is missing -- callers must
+    return ``problems`` as-is in that case. Otherwise ``problems`` is
+    ``[]`` and ``translation_text`` is ``None`` only when
+    ``README.zh-CN.md`` does not exist (callers decide how to report
+    that, since C25/C26/C27 phrase it slightly differently).
+    """
+    template_dir = repo_root / "template"
+    if not template_dir.is_dir():
+        raise SkipCheck(f"missing {template_dir}")
+
+    source_path = repo_root / WORKSPACE_SOURCE
+    translation_path = repo_root / WORKSPACE_TRANSLATION
+
+    if not source_path.is_file():
+        return None, None, [f"{WORKSPACE_SOURCE}: file does not exist"]
+
+    source_text = read_text(source_path)
+    expected = WORKSPACE_SELECTOR_LINES[WORKSPACE_SOURCE]
+    if expected not in source_text.splitlines():
+        return None, None, [
+            f"{WORKSPACE_SOURCE}: language selector: missing the verbatim "
+            f"line {expected!r}"
+        ]
+
+    translation_text = read_text(translation_path) if translation_path.is_file() else None
+    return source_text, translation_text, []
+
+
+def _git_tracked_file_count(repo_root: Path, subpath: str) -> int:
+    """Count of git-tracked files under ``repo_root / subpath``.
+
+    tooling-delta-003.md §4 C26 declares the ``template/`` file count as
+    "被 git 跟踪的文件数" (the count of git-tracked files), not a raw
+    filesystem walk -- ``iter_files`` also counts untracked files, so a
+    stray untracked file under ``template/`` (a scratch file, a build
+    artefact) would make a correct declaration look wrong. This runs git
+    from *repo_root* rather than falling back to a filesystem walk when
+    git is unavailable, since a fallback could silently give a different
+    (wrong) answer instead of failing loudly.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "--", subpath],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SkipCheck(
+            f"unable to run `git -C {repo_root} ls-files -- {subpath}`: {exc}"
+        ) from exc
+    return len([line for line in result.stdout.splitlines() if line])
+
+
+def _marker_candidates(text: str, source_name: str) -> list[re.Match]:
+    """Lines in *text* that purport to be a ``translation-of`` marker for
+    *source_name*, whether or not the digest portion is well-formed.
+
+    ``DIGEST_RE`` alone only recognises a *well-formed* marker line
+    (exactly 16 lowercase hex digits), so a well-formed marker sitting
+    next to a malformed duplicate for the same source is invisible to
+    code that looks only for ``DIGEST_RE`` matches: the malformed line is
+    silently ignored instead of tripping the "more than one marker" FAIL.
+    Detecting this broader set of *candidate* marker lines first lets a
+    duplicate be caught even when it is malformed. Matching group 1 is
+    the (possibly malformed) digest text.
+    """
+    candidate_re = re.compile(
+        r"^<!-- translation-of: " + re.escape(source_name) + r" sha256:(\S*) -->$"
+    )
+    return [m for m in (candidate_re.match(line) for line in text.splitlines()) if m]
+
+
+def check_c25(ctx: Context) -> list[str]:
+    """The workspace homepage's own language structure (tooling-delta-003.md §3 C25).
+
+    tooling-delta-003.md §2: paths are resolved relative to the repository
+    root (the script's own parent directory's parent), never to
+    ``ctx.template_dir`` -- the workspace homepage (``README.md``) lives
+    outside ``template/``, same rationale as check_c23.
+
+    Skip condition (tooling-delta-003.md §2, corrected by Finding 2):
+    ``template/`` missing is the *only* SkipCheck condition now. A missing
+    ``README.md``, or one that is missing the verbatim language-selector
+    line, is a FAIL (see ``_workspace_gate``). A missing translation is
+    likewise *not* a skip condition: that is a FAIL, since the selector
+    then points at a file that does not exist.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    source_text, translation_text, problems = _workspace_gate(repo_root)
+    if source_text is None:
+        return problems
+
+    texts = {WORKSPACE_SOURCE: source_text}
+    if translation_text is not None:
+        texts[WORKSPACE_TRANSLATION] = translation_text
+    else:
+        problems.append(f"{WORKSPACE_TRANSLATION}: file does not exist")
+
+    # --- 2. Language selector -------------------------------------------
+    for rel, text in texts.items():
+        expected = WORKSPACE_SELECTOR_LINES[rel]
+        lines = text.splitlines()
+        h1_index = next(
+            (i for i, line in enumerate(lines) if line.startswith("# ")), None
+        )
+        if h1_index is None:
+            problems.append(f"{rel}: language selector: no H1 heading found")
+        elif (
+            h1_index + 2 >= len(lines)
+            or lines[h1_index + 1].strip() != ""
+            or lines[h1_index + 2] != expected
+        ):
+            problems.append(
+                f"{rel}: language selector: must appear exactly one blank "
+                "line after the H1 heading"
+            )
+
+        # --- 3, 4. Anchors ------------------------------------------------
+        anchors = _anchor_lines(text)
+        headings = _heading_lines(text)
+        actual_seq = [anchor_id for _n, anchor_id in anchors]
+        if actual_seq != WORKSPACE_ANCHOR_SEQUENCE:
+            missing = [a for a in WORKSPACE_ANCHOR_SEQUENCE if a not in actual_seq]
+            unexpected = [a for a in actual_seq if a not in WORKSPACE_ANCHOR_SEQUENCE]
+            message = (
+                f"{rel}: anchors: sequence does not match the workspace "
+                f"sequence\n    expected: {WORKSPACE_ANCHOR_SEQUENCE}\n    "
+                f"found:    {actual_seq}"
+            )
+            if missing:
+                message += f"\n    missing:    {missing}"
+            if unexpected:
+                message += f"\n    unexpected: {unexpected}"
+            problems.append(message)
+        anchor_line_numbers = {number for number, _id in anchors}
+        for number, heading_text in headings:
+            if (number - 1) not in anchor_line_numbers:
+                problems.append(
+                    f"{rel}:{number}: anchors: heading has no anchor line "
+                    f"directly above it: {heading_text}"
+                )
+        if len(anchors) != len(headings):
+            problems.append(
+                f"{rel}: anchors: anchor count ({len(anchors)}) does not "
+                f"equal heading count ({len(headings)})"
+            )
+
+    # --- 5. Normative-version notice ------------------------------------
+    notice = (
+        "> 英文版是规范版本。本页与 [README.md](README.md) "
+        "不一致时，以英文版为准。"
+    )
+    if WORKSPACE_TRANSLATION in texts and notice not in texts[WORKSPACE_TRANSLATION]:
+        problems.append(
+            f"{WORKSPACE_TRANSLATION}: normative notice: missing the "
+            f"verbatim notice: {notice!r}"
+        )
+    if notice in texts[WORKSPACE_SOURCE]:
+        problems.append(
+            f"{WORKSPACE_SOURCE}: normative notice: must not contain the "
+            "normative-version notice"
+        )
+
+    # --- 6. Language purity ----------------------------------------------
+    stripped_source = strip_for_purity(
+        texts[WORKSPACE_SOURCE], WORKSPACE_SELECTOR_LINES[WORKSPACE_SOURCE]
+    )
+    count = cjk_count(stripped_source)
+    if count:
+        problems.append(
+            f"{WORKSPACE_SOURCE}: purity: contains {count} CJK character(s) "
+            "but must be English-only"
+        )
+    if WORKSPACE_TRANSLATION in texts:
+        stripped_translation = strip_for_purity(
+            texts[WORKSPACE_TRANSLATION], WORKSPACE_SELECTOR_LINES[WORKSPACE_TRANSLATION]
+        )
+        run = longest_english_run(stripped_translation)
+        if run >= 6:
+            problems.append(
+                f"{WORKSPACE_TRANSLATION}: purity: longest run of consecutive "
+                f"English words is {run} (limit is fewer than 6)"
+            )
+
+    return problems
+
+
+def check_c26(ctx: Context) -> list[str]:
+    """The workspace homepage's declared facts agree with reality (tooling-delta-003.md §4 C26).
+
+    tooling-delta-003.md §2: paths are resolved relative to the repository
+    root (the script's own parent directory's parent), never to
+    ``ctx.template_dir`` -- same rationale as check_c23 and check_c25.
+
+    Skip condition (tooling-delta-003.md §2, corrected by Finding 2): same
+    as check_c25 -- ``template/`` missing is the only SkipCheck condition;
+    a missing ``README.md`` or a missing selector line is a FAIL (see
+    ``_workspace_gate``). A missing ``README.zh-CN.md`` is also a FAIL
+    (Finding 6), naming the missing file, rather than being silently
+    dropped from the set of files this check validates.
+
+    The declared ``template/`` file count (tooling-delta-003.md §4.1) is
+    compared against the count of git-tracked files under ``template/``
+    (Finding 4), not a filesystem walk -- an untracked scratch file must
+    not make a correct declaration look wrong.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    source_text, translation_text, problems = _workspace_gate(repo_root)
+    if source_text is None:
+        return problems
+
+    texts = {WORKSPACE_SOURCE: source_text}
+    if translation_text is not None:
+        texts[WORKSPACE_TRANSLATION] = translation_text
+    else:
+        problems.append(f"{WORKSPACE_TRANSLATION}: file does not exist")
+
+    actual_files = _git_tracked_file_count(repo_root, "template")
+    actual_checks = len(CHECKS)
+    spec_dirs = sorted(
+        path.name for path in (repo_root / "specs").iterdir() if path.is_dir()
+    )
+
+    file_count_re = {
+        WORKSPACE_SOURCE: re.compile(r"`template/` holds (\d+) files"),
+        WORKSPACE_TRANSLATION: re.compile(r"`template/` 共 (\d+) 个文件"),
+    }
+    checks_count_re = {
+        WORKSPACE_SOURCE: re.compile(r"(\d+) structural checks"),
+        WORKSPACE_TRANSLATION: re.compile(r"(\d+) 项结构校验"),
+    }
+
+    for rel, text in texts.items():
+        # --- 1. template/ file count -----------------------------------
+        match = file_count_re[rel].search(text)
+        if match is None:
+            problems.append(f"{rel}: no template file count found")
+        else:
+            declared = int(match.group(1))
+            if declared != actual_files:
+                problems.append(
+                    f"{rel}: template file count says {declared}, actual {actual_files}"
+                )
+
+        # --- 2. structural check count -----------------------------------
+        match = checks_count_re[rel].search(text)
+        if match is None:
+            problems.append(f"{rel}: no structural check count found")
+        else:
+            declared = int(match.group(1))
+            if declared != actual_checks:
+                problems.append(
+                    f"{rel}: structural check count says {declared}, actual {actual_checks}"
+                )
+
+        # --- 3. spec directories ------------------------------------------
+        for name in spec_dirs:
+            if f"`specs/{name}/`" not in text:
+                problems.append(f"{rel}: spec directory {name} is not listed")
+
+    return problems
+
+
+def check_c27(ctx: Context) -> list[str]:
+    """The workspace homepage's translation stays fresh (tooling-delta-003.md §5 C27).
+
+    Isomorphic to check_c24, with the workspace homepage (``README.md``)
+    as the source instead of a ``template/`` guidance file.
+
+    tooling-delta-003.md §2: paths are resolved relative to the repository
+    root (the script's own parent directory's parent), never to
+    ``ctx.template_dir`` -- same rationale as check_c23, check_c25 and
+    check_c26.
+
+    Skip condition (tooling-delta-003.md §2, corrected by Finding 2): same
+    as check_c25 and check_c26 -- ``template/`` missing is the only
+    SkipCheck condition; a missing ``README.md`` or a missing selector
+    line is a FAIL (see ``_workspace_gate``).
+
+    Finding 5: a valid marker line and a malformed duplicate marker line
+    for the same source must both be detected as *candidates* before
+    either is validated, so the malformed duplicate cannot hide behind
+    the valid one and slip through as a PASS -- see ``_marker_candidates``.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    source_text, translation_text, problems = _workspace_gate(repo_root)
+    if source_text is None:
+        return problems
+
+    malformed_message = [
+        f"{WORKSPACE_TRANSLATION}: missing or malformed source marker for "
+        f"{WORKSPACE_SOURCE} (expected exactly one line "
+        f"'<!-- translation-of: {WORKSPACE_SOURCE} sha256:<16 hex> -->')"
+    ]
+
+    if translation_text is None:
+        return malformed_message
+
+    candidates = _marker_candidates(translation_text, WORKSPACE_SOURCE)
+
+    if not candidates:
+        return malformed_message
+
+    if len(candidates) > 1:
+        return [
+            f"{WORKSPACE_TRANSLATION}: found {len(candidates)} source "
+            f"marker lines for {WORKSPACE_SOURCE} (expected exactly one line "
+            f"'<!-- translation-of: {WORKSPACE_SOURCE} sha256:<16 hex> -->')"
+        ]
+
+    candidate = candidates[0]
+    recorded_digest = candidate.group(1)
+    if not re.fullmatch(r"[0-9a-f]{16}", recorded_digest):
+        return malformed_message
+
+    source_path = repo_root / WORKSPACE_SOURCE
+    actual_digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
+    if recorded_digest != actual_digest:
+        message = (
+            f"{WORKSPACE_TRANSLATION}: source marker is stale for "
+            f"{WORKSPACE_SOURCE} (recorded {recorded_digest}, current "
+            f"{actual_digest}); run python3 tools/check_template.py "
+            "--update-digests"
+        )
+        if ctx.release:
+            return [message]
+        raise WarnCheck([message])
+    return []
+
+
+def _refresh_translation_digest(
+    translation_path: Path, translation_rel: str, source_path: Path, source_name: str
+) -> bool:
+    """Refresh one translation file's source-marker digest in place.
+
+    The single substitution implementation shared by every
+    ``--update-digests`` caller (tooling-delta-003.md §7): a single
+    in-place regex substitution, a ``write_bytes`` write-back, and --
+    with the file left byte-for-byte untouched -- a refusal whenever more
+    than one marker line for *source_name* is found. Only the
+    ``<!-- translation-of: ... sha256:... -->`` line is ever rewritten;
+    every other byte of the file is left untouched (tooling-delta.md
+    §1.2). Returns ``True`` when the file's digest was actually rewritten.
+    """
+    digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
+    text = translation_path.read_bytes().decode("utf-8")
+
+    # Match the marker line's text only, without consuming the line
+    # ending -- a lookahead for an optional trailing "\r" (before the
+    # "\n" that (?m) $ matches against) means the substitution below
+    # never touches a line-ending byte, whatever it is (tooling-delta.md
+    # §1.2). Using a regex over the whole decoded text, rather than
+    # splitting on a single detected newline, also means a file mixing
+    # CRLF and LF still has every one of its marker lines found.
+    #
+    # Finding 5: the digest group is deliberately permissive (``\S*``,
+    # not ``[0-9a-f]{16}``) so that a *malformed* duplicate marker is
+    # still counted as a candidate here. Matching only well-formed
+    # markers would let a well-formed marker be refreshed in place while
+    # a malformed duplicate for the same source is silently left behind
+    # -- the file would then have two marker lines for *source_name*, one
+    # of them stale garbage, and update-digests would have reported
+    # success.
+    marker_re = re.compile(
+        r"(?m)^<!-- translation-of: "
+        + re.escape(source_name)
+        + r" sha256:(\S*) -->(?=\r?$)"
+    )
+    matches = list(marker_re.finditer(text))
+
+    if not matches:
+        return False
+
+    if len(matches) > 1:
+        print(
+            f"{translation_rel}: skipped (found {len(matches)} source "
+            f"marker lines for {source_name}; expected exactly one)"
+        )
+        return False
+
+    match = matches[0]
+    old_digest = match.group(1)
+    if not re.fullmatch(r"[0-9a-f]{16}", old_digest):
+        print(
+            f"{translation_rel}: skipped (malformed source marker for "
+            f"{source_name})"
+        )
+        return False
+    if old_digest != digest:
+        new_line = f"<!-- translation-of: {source_name} sha256:{digest} -->"
+        new_text = text[: match.start()] + new_line + text[match.end() :]
+        translation_path.write_bytes(new_text.encode("utf-8"))
+        print(f"{translation_rel}: {old_digest} -> {digest}")
+        return True
+    return False
+
+
 def update_digests(template_dir: Path) -> None:
     """Refresh every translation's source-marker digest in place.
 
@@ -2132,43 +2558,26 @@ def update_digests(template_dir: Path) -> None:
                 f"{translation_rel}: skipped (source not found: {source_rel})"
             )
             continue
-        digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
-        source_name = Path(source_rel).name
-
         translation_path = template_dir / translation_rel
-        text = translation_path.read_bytes().decode("utf-8")
+        if _refresh_translation_digest(
+            translation_path, translation_rel, source_path, Path(source_rel).name
+        ):
+            any_updated = True
 
-        # Match the marker line's text only, without consuming the line
-        # ending -- a lookahead for an optional trailing "\r" (before the
-        # "\n" that (?m) $ matches against) means the substitution below
-        # never touches a line-ending byte, whatever it is (tooling-delta.md
-        # §1.2). Using a regex over the whole decoded text, rather than
-        # splitting on a single detected newline, also means a file mixing
-        # CRLF and LF still has every one of its marker lines found.
-        marker_re = re.compile(
-            r"(?m)^<!-- translation-of: "
-            + re.escape(source_name)
-            + r" sha256:([0-9a-f]{16}) -->(?=\r?$)"
-        )
-        matches = list(marker_re.finditer(text))
-
-        if not matches:
-            continue
-
-        if len(matches) > 1:
-            print(
-                f"{translation_rel}: skipped (found {len(matches)} source "
-                f"marker lines for {source_name}; expected exactly one)"
-            )
-            continue
-
-        match = matches[0]
-        old_digest = match.group(1)
-        if old_digest != digest:
-            new_line = f"<!-- translation-of: {source_name} sha256:{digest} -->"
-            new_text = text[: match.start()] + new_line + text[match.end() :]
-            translation_path.write_bytes(new_text.encode("utf-8"))
-            print(f"{translation_rel}: {old_digest} -> {digest}")
+    # tooling-delta-003.md §7: the workspace homepage's own translation
+    # lives outside template/ and is refreshed through the very same
+    # substitution helper as above -- not a second implementation.
+    # Resolved relative to the repository root (never ctx.template_dir /
+    # the *template_dir* parameter here), same rationale as check_c25 ~
+    # check_c27. Silently skipped when the workspace translation does not
+    # exist yet.
+    repo_root = Path(__file__).resolve().parent.parent
+    workspace_source = repo_root / WORKSPACE_SOURCE
+    workspace_translation = repo_root / WORKSPACE_TRANSLATION
+    if workspace_source.is_file() and workspace_translation.is_file():
+        if _refresh_translation_digest(
+            workspace_translation, WORKSPACE_TRANSLATION, workspace_source, WORKSPACE_SOURCE
+        ):
             any_updated = True
 
     if not any_updated:
@@ -2200,6 +2609,9 @@ CHECKS = {
     "C22": ("Removal simulation", lambda ctx: check_c22(ctx)),
     "C23": ("Contract parity", lambda ctx: check_c23(ctx)),
     "C24": ("Translation freshness", lambda ctx: check_c24(ctx)),
+    "C25": ("Workspace language structure", lambda ctx: check_c25(ctx)),
+    "C26": ("Workspace facts", lambda ctx: check_c26(ctx)),
+    "C27": ("Workspace translation freshness", lambda ctx: check_c27(ctx)),
 }
 
 
