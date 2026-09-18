@@ -16,7 +16,7 @@
 | 步骤 | 命令 | 期望结果 | 覆盖 |
 |---|---|---|---|
 | A1 单元测试 | `python3 -m unittest discover -s tools/tests` | `OK`。`template/` 尚未完成时，部分测试会显示为 skipped | 工具本身 |
-| A2 结构校验 | `python3 tools/check_template.py` | 最后一行为 `Summary: 24 passed, 0 failed, 0 warned, 0 skipped`；未提供可选的 `UPGRADE-TO-TEAM.md` 时为 `23 passed, 0 failed, 0 warned, 1 skipped`（C19 跳过） | SC-003、SC-006、SC-007、SC-010、SC-012；FR-001 ~ FR-039 的静态部分 |
+| A2 结构校验 | `python3 tools/check_template.py` | 最后一行为 `Summary: 27 passed, 0 failed, 0 warned, 0 skipped`；未提供可选的 `UPGRADE-TO-TEAM.md` 时为 `26 passed, 0 failed, 0 warned, 1 skipped`（C19 跳过） | SC-003、SC-006、SC-007、SC-010、SC-012；FR-001 ~ FR-039 的静态部分 |
 | A3 刷新认可度数据 | `python3 tools/verify_sources.py --write` | 退出码为 0；报告中没有 `ARCHIVED` 或未评估过的 `STALE` 出现在选定来源上 | 宪章原则 III；SC-008 |
 | A4 发布门禁（自动部分） | `python3 tools/check_template.py --release` | 0 项失败 | 宪章发布门禁 1、3、5，以及门禁 2 中"核心要素齐全"的静态部分 |
 | A5 校验耗时 | `time python3 tools/check_template.py` | 实际耗时不超过 5 秒 | plan 的 Performance Goals |
@@ -29,7 +29,8 @@
 
 1. 在 GitHub 上新建公开仓库 `chefs-pick-oss-starter`，默认分支为 `main`。
 2. 把 `template/` 中的内容（包括隐藏文件）作为该仓库 `main` 分支的全部内容，任选一种方式：
-   - **开发工作区已是 Git 仓库时**：先运行 `git subtree split --prefix=template -b publish`，再运行 `git push <模板仓库远程名> publish:main`。
+   - **首次发布到空仓库时**（本步骤只适用于这一种情形）：先运行 `git subtree split --prefix=template -b publish`，再运行 `git push <模板仓库远程名> publish:main`。
+   - **后续发布到已有内容的仓库时**：按仓库根目录 `README.md` 的 `Publishing` 一节操作。绝不要强制推送；subtree split 切出的历史与模板仓库没有共同祖先，强推会让 v1.0.0 标签指向的提交不再可达。
    - **直接复制**：克隆空的模板仓库，把 `template/` 下的所有内容复制进去，然后提交并推送。
    - 两种方式都**不要**把开发工作区中的其他目录推送到模板仓库。
 3. 在仓库设置中完成以下几项：

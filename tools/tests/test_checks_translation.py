@@ -30,6 +30,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -76,6 +77,28 @@ class TestC24TranslationFreshness(unittest.TestCase):
             )
             status, problems = run_one("C24", make_ctx(tmp))
         self.assertEqual(status, "PASS", problems)
+
+    def test_valid_marker_plus_malformed_duplicate_fails(self) -> None:
+        # C24's own message has always promised "expected exactly one
+        # line", but it counted only well-formed markers, so a malformed
+        # duplicate hid behind a valid one and the check passed while
+        # --update-digests refused the very same file.  Counting
+        # candidates makes the check keep the promise it already made.
+        digest = source_digest()
+        malformed = "<!-- translation-of: README.md sha256:BADBAD -->"
+        doubled = translation_text(marker(digest)).replace(
+            marker(digest), f"{marker(digest)}\n{malformed}", 1
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(
+                tmp,
+                {SOURCE_REL: SOURCE_TEXT, TRANSLATION_REL: doubled},
+            )
+            status, problems = run_one("C24", make_ctx(tmp))
+        self.assertEqual(status, "FAIL", problems)
+        joined = " ".join(problems)
+        self.assertIn("found 2 source", joined)
+        self.assertIn(TRANSLATION_REL, joined)
 
     def test_stale_digest_without_release_warns_and_exits_zero(self) -> None:
         stale_digest = "0" * 16
@@ -313,6 +336,36 @@ class TestUpdateDigests(unittest.TestCase):
         self.assertIn("2", output)
         self.assertIn("README.md", output)
 
+    def test_valid_marker_plus_malformed_duplicate_refused_and_untouched(self) -> None:
+        # FIXED (Finding 5): ``_refresh_translation_digest`` is the shared
+        # substitution implementation behind ``update_digests()`` for both
+        # ``template/`` translations (this test) and the workspace
+        # translation (see test_checks_translation's C27 test of the same
+        # name). It must detect a malformed duplicate marker as a
+        # candidate too, and refuse the whole file, rather than refreshing
+        # the one well-formed marker line and silently leaving the
+        # malformed duplicate behind.
+        digest = source_digest()
+        malformed = "<!-- translation-of: README.md sha256:NOTHEX -->"
+        before_text = "\n".join(
+            [marker(digest), malformed, "# 主厨精选 OSS 启动模板", ""]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, {SOURCE_REL: SOURCE_TEXT, TRANSLATION_REL: before_text})
+            translation_path = Path(tmp) / TRANSLATION_REL
+            before_bytes = translation_path.read_bytes()
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(Path(tmp))
+
+            after_bytes = translation_path.read_bytes()
+
+        self.assertEqual(before_bytes, after_bytes)
+        output = out.getvalue()
+        self.assertIn(TRANSLATION_REL, output)
+        self.assertIn("2", output)
+        self.assertIn("README.md", output)
+
     def test_mixed_crlf_lf_endings_only_digest_bytes_change(self) -> None:
         # FIXED (Finding 4): update_digests must not open the file in text
         # mode (which would translate every "\n" to os.linesep on write),
@@ -376,6 +429,392 @@ class TestUpdateDigests(unittest.TestCase):
 
         self.assertEqual(out.getvalue().strip(), "No digest needed updating.")
         self.assertEqual(before_bytes, after_bytes)
+
+
+# ----------------------------------------------------------------------
+# T014: C27 (Workspace translation freshness) and ``update_digests()``'s
+# workspace branch.
+#
+# Contract: ``specs/003-workspace-self-compliance/contracts/tooling-delta-003.md``
+# §5 C27 and §7. C27 is check_c24's structural twin, retargeted at the
+# workspace homepage: ``README.md`` is the English source and
+# ``README.zh-CN.md`` is its translation. Unlike check_c24, check_c27
+# resolves both paths as ``Path(check_template.__file__).resolve().parent
+# .parent`` -- the repository root -- and deliberately ignores
+# ``ctx.template_dir`` (tooling-delta-003.md §2), the same rationale as
+# check_c23, check_c25 and check_c26. A test that only pointed
+# ``--template-dir`` elsewhere would still read the *real* ``README.md`` /
+# ``README.zh-CN.md``, so every fixture here instead patches
+# ``check_template.__file__`` via the ``FakeRepoRoot`` helper (copied from
+# ``test_checks_contract_parity.py``, ``test_workspace_language.py`` and
+# ``test_workspace_facts.py``) so the check's own path resolution lands
+# under a throwaway temporary directory. ``update_digests()``'s workspace
+# branch resolves ``repo_root`` the exact same way, so ``FakeRepoRoot``
+# isolates that too. No test below reads or writes the real ``README.md``,
+# ``README.zh-CN.md``, ``template/`` or
+# ``specs/001-chefs-pick-starter/contracts/guidance-layer.md``.
+#
+# check_c27 (and check_c25/check_c26) SKIP unless ``README.md`` contains
+# the language-selector line verbatim, so every fixture meant to be
+# evaluated (rather than skipped) includes it.
+# ----------------------------------------------------------------------
+
+WORKSPACE_SOURCE_REL = "README.md"
+WORKSPACE_TRANSLATION_REL = "README.zh-CN.md"
+
+# Verbatim from tooling-delta-003.md §1's WORKSPACE_SELECTOR_LINES["README.md"].
+WORKSPACE_SELECTOR_LINE = "**English** · [简体中文](README.zh-CN.md)"
+
+WORKSPACE_SOURCE_TEXT = (
+    "# Chef's Pick OSS Starter Workspace\n\n"
+    f"{WORKSPACE_SELECTOR_LINE}\n\n"
+    "Some workspace content.\n"
+)
+
+
+def workspace_source_digest(text: str = WORKSPACE_SOURCE_TEXT) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def workspace_marker(digest: str, source_name: str = "README.md") -> str:
+    return f"<!-- translation-of: {source_name} sha256:{digest} -->"
+
+
+def workspace_translation_text(marker_line: str | None) -> str:
+    lines = []
+    if marker_line is not None:
+        lines.append(marker_line)
+    lines += ["# 主厨精选 OSS 启动模板工作区", "", "中文内容。", ""]
+    return "\n".join(lines)
+
+
+def workspace_base_files(translation: str | None) -> dict[str, str]:
+    """``template/`` (so ``template_dir.is_dir()`` holds) plus the pair."""
+    files: dict[str, str] = {
+        "template/.keep": "",
+        WORKSPACE_SOURCE_REL: WORKSPACE_SOURCE_TEXT,
+    }
+    if translation is not None:
+        files[WORKSPACE_TRANSLATION_REL] = translation
+    return files
+
+
+class FakeRepoRoot:
+    """A temporary directory patched in as C27's repository root.
+
+    Copied from ``test_checks_contract_parity.py``'s helper of the same
+    name. Entering the context manager patches ``check_template.__file__``
+    to ``<tmp>/tools/check_template.py`` (a path that need not exist on
+    disk) so that ``check_c27``'s own ``repo_root = Path(__file__)
+    .resolve().parent.parent`` resolves to ``<tmp>`` -- never to the real
+    repository, and never to ``ctx.template_dir`` (which C27 ignores by
+    design, per tooling-delta-003.md §2). ``update_digests()``'s workspace
+    branch recomputes ``repo_root`` the same way, so this also isolates it
+    from the real ``README.md`` / ``README.zh-CN.md``.
+    """
+
+    def __init__(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        self._patcher = mock.patch.object(
+            ct, "__file__", str(self.root / "tools" / "check_template.py")
+        )
+
+    def __enter__(self) -> "FakeRepoRoot":
+        self._patcher.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._patcher.stop()
+        self._tmp.cleanup()
+
+    def write(self, files: dict[str, str]) -> None:
+        write_tree(self.root, files)
+
+
+class TestC27WorkspaceTranslationFreshness(unittest.TestCase):
+    """C27: the workspace homepage's translation stays fresh."""
+
+    def test_fresh_marker_passes(self) -> None:
+        digest = workspace_source_digest()
+        with FakeRepoRoot() as fake:
+            fake.write(
+                workspace_base_files(
+                    workspace_translation_text(workspace_marker(digest))
+                )
+            )
+            status, problems = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "PASS", problems)
+
+    def test_source_marker_absent_fails(self) -> None:
+        with FakeRepoRoot() as fake:
+            fake.write(workspace_base_files(workspace_translation_text(None)))
+            status, problems = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        self.assertTrue(
+            any("missing or malformed" in p for p in problems), problems
+        )
+        self.assertTrue(
+            any(WORKSPACE_TRANSLATION_REL in p for p in problems), problems
+        )
+
+    def test_duplicate_source_markers_fail_and_update_digests_refuses(self) -> None:
+        # FAIL half: two marker lines for the same source must FAIL
+        # outright, naming the file, how many markers were found, and the
+        # source name -- same shape as check_c24's duplicate-marker FAIL.
+        digest = workspace_source_digest()
+        duplicated = "\n".join(
+            [
+                workspace_marker(digest),
+                workspace_marker("0" * 16),
+                "# 主厨精选 OSS 启动模板工作区",
+                "",
+            ]
+        )
+        with FakeRepoRoot() as fake:
+            fake.write(workspace_base_files(duplicated))
+            status, problems = run_one("C27", make_ctx(fake.root))
+            self.assertEqual(status, "FAIL", problems)
+            self.assertTrue(
+                any(
+                    WORKSPACE_TRANSLATION_REL in p
+                    and "2" in p
+                    and "README.md" in p
+                    for p in problems
+                ),
+                problems,
+            )
+
+            # ``--update-digests`` half: it must refuse the file (never
+            # guess which duplicate is authoritative) and leave every byte
+            # of it untouched.
+            translation_path = fake.root / WORKSPACE_TRANSLATION_REL
+            before_bytes = translation_path.read_bytes()
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(fake.root / "template")
+
+            after_bytes = translation_path.read_bytes()
+
+        self.assertEqual(before_bytes, after_bytes)
+        output = out.getvalue()
+        self.assertIn(WORKSPACE_TRANSLATION_REL, output)
+        self.assertIn("2", output)
+        self.assertIn("README.md", output)
+
+    def test_stale_marker_without_release_warns_with_exact_message_and_exits_zero(
+        self,
+    ) -> None:
+        stale_digest = "0" * 16
+        current_digest = workspace_source_digest()
+        self.assertNotEqual(stale_digest, current_digest)
+        with FakeRepoRoot() as fake:
+            fake.write(
+                workspace_base_files(
+                    workspace_translation_text(workspace_marker(stale_digest))
+                )
+            )
+            ctx = make_ctx(fake.root, release=False)
+            with self.assertRaises(ct.WarnCheck) as caught:
+                ct.check_c27(ctx)
+            messages = caught.exception.args[0]
+            self.assertTrue(messages)
+            self.assertEqual(
+                messages[0],
+                f"{WORKSPACE_TRANSLATION_REL}: source marker is stale for "
+                f"README.md (recorded {stale_digest}, current "
+                f"{current_digest}); run python3 tools/check_template.py "
+                "--update-digests",
+            )
+
+            # FR-014 (§1.1): WARN never affects the exit code, so the whole
+            # process must still exit 0.
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = ct.main(
+                    ["--template-dir", str(fake.root), "--only", "C27"]
+                )
+        self.assertEqual(exit_code, 0)
+
+    def test_stale_marker_with_release_fails_and_exits_one(self) -> None:
+        stale_digest = "0" * 16
+        with FakeRepoRoot() as fake:
+            fake.write(
+                workspace_base_files(
+                    workspace_translation_text(workspace_marker(stale_digest))
+                )
+            )
+            ctx = make_ctx(fake.root, release=True)
+            # Under --release the same staleness is returned as an ordinary
+            # FAIL list, not raised as a WarnCheck (§1.1).
+            problems = ct.check_c27(ctx)
+            self.assertTrue(problems)
+
+            with contextlib.redirect_stdout(io.StringIO()):
+                exit_code = ct.main(
+                    [
+                        "--template-dir",
+                        str(fake.root),
+                        "--only",
+                        "C27",
+                        "--release",
+                    ]
+                )
+        self.assertEqual(exit_code, 1)
+
+    def test_missing_selector_in_source_fails(self) -> None:
+        # FIXED (Finding 2): no language-selector line anywhere in
+        # README.md used to be the tooling-delta-003.md §2 SkipCheck
+        # predicate -- deleting or misspelling that one line silently
+        # turned C27 (and C25, C26) off. It is now a FAIL, naming
+        # README.md and what is missing; ``template/`` still exists here,
+        # so this is not the "not the workspace repository" case that
+        # remains a SkipCheck (see test_missing_template_dir_still_skips).
+        no_selector_source = WORKSPACE_SOURCE_TEXT.replace(
+            f"{WORKSPACE_SELECTOR_LINE}\n\n", ""
+        )
+        self.assertNotIn(WORKSPACE_SELECTOR_LINE, no_selector_source)
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    "template/.keep": "",
+                    WORKSPACE_SOURCE_REL: no_selector_source,
+                }
+            )
+            status, problems = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(WORKSPACE_SOURCE_REL, joined)
+        self.assertIn("language selector", joined)
+
+    def test_missing_readme_fails(self) -> None:
+        # FIXED (Finding 2): README.md itself missing is a FAIL, not a
+        # SkipCheck, once ``template/`` exists.
+        with FakeRepoRoot() as fake:
+            fake.write({"template/.keep": ""})
+            status, problems = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(WORKSPACE_SOURCE_REL, joined)
+        self.assertIn("does not exist", joined)
+
+    def test_missing_template_dir_still_skips(self) -> None:
+        # The one remaining SkipCheck predicate (Finding 2): ``template/``
+        # does not exist at all, i.e. this is not the workspace repository.
+        with FakeRepoRoot() as fake:
+            fake.write({WORKSPACE_SOURCE_REL: WORKSPACE_SOURCE_TEXT})
+            self.assertFalse((fake.root / "template").exists())
+            status, reason = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "SKIP", reason)
+
+    def test_valid_marker_plus_malformed_duplicate_fails_and_refresh_refuses(
+        self,
+    ) -> None:
+        # FIXED (Finding 5): a well-formed marker line sitting next to a
+        # malformed duplicate for the same source used to slip through as
+        # a PASS -- DIGEST_RE's strict match found only the well-formed
+        # line and never noticed the malformed one. Candidate detection
+        # (permissive on the digest) must catch both lines and FAIL with
+        # "found 2 source marker lines", and update-digests must refuse to
+        # touch the file rather than refreshing the valid line and leaving
+        # the malformed one behind.
+        digest = workspace_source_digest()
+        malformed = "<!-- translation-of: README.md sha256:NOTHEX -->"
+        mixed = "\n".join(
+            [
+                workspace_marker(digest),
+                malformed,
+                "# 主厨精选 OSS 启动模板工作区",
+                "",
+            ]
+        )
+        with FakeRepoRoot() as fake:
+            fake.write(workspace_base_files(mixed))
+            status, problems = run_one("C27", make_ctx(fake.root))
+            self.assertEqual(status, "FAIL", problems)
+            self.assertTrue(
+                any(
+                    WORKSPACE_TRANSLATION_REL in p
+                    and "2" in p
+                    and "README.md" in p
+                    for p in problems
+                ),
+                problems,
+            )
+
+            translation_path = fake.root / WORKSPACE_TRANSLATION_REL
+            before_bytes = translation_path.read_bytes()
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(fake.root / "template")
+
+            after_bytes = translation_path.read_bytes()
+
+        self.assertEqual(before_bytes, after_bytes)
+        self.assertIn(WORKSPACE_TRANSLATION_REL, out.getvalue())
+
+    def test_missing_translation_fails_naming_it(self) -> None:
+        # FIXED (Finding 6): the selector is in place but
+        # README.zh-CN.md itself does not exist -- C27 must FAIL naming
+        # the missing marker/file, not skip.
+        with FakeRepoRoot() as fake:
+            fake.write(workspace_base_files(None))
+            status, problems = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(WORKSPACE_TRANSLATION_REL, joined)
+        self.assertIn("missing or malformed", joined)
+
+
+class TestUpdateDigestsWorkspaceBranch(unittest.TestCase):
+    """``update_digests()``'s workspace branch (tooling-delta-003.md §7).
+
+    Reuses the exact same in-place substitution helper as the ``template/``
+    translations -- not a second implementation -- so this pins down only
+    the parts specific to routing through the workspace paths.
+    """
+
+    def test_rewrites_only_the_workspace_digest_line(self) -> None:
+        stale_digest = "0" * 16
+        correct_digest = workspace_source_digest()
+        before_lines = [
+            workspace_marker(stale_digest),
+            "# 主厨精选 OSS 启动模板工作区",
+            "",
+            "中文内容，包含标点。",
+            "",
+        ]
+        before_text = "\n".join(before_lines)
+        with FakeRepoRoot() as fake:
+            fake.write(workspace_base_files(before_text))
+            translation_path = fake.root / WORKSPACE_TRANSLATION_REL
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(fake.root / "template")
+
+            self.assertIn(stale_digest, out.getvalue())
+            self.assertIn(correct_digest, out.getvalue())
+
+            after_text = translation_path.read_text(encoding="utf-8")
+            after_lines = after_text.split("\n")
+
+        self.assertEqual(after_lines[0], workspace_marker(correct_digest))
+        self.assertEqual(after_lines[1:], before_lines[1:])
+        self.assertEqual(len(after_lines), len(before_lines))
+
+    def test_missing_workspace_translation_is_silently_skipped(self) -> None:
+        # tooling-delta-003.md §7: silently skipped when the workspace
+        # translation does not exist yet -- must not raise, and must not
+        # create the file.
+        with FakeRepoRoot() as fake:
+            fake.write(workspace_base_files(None))
+            translation_path = fake.root / WORKSPACE_TRANSLATION_REL
+            self.assertFalse(translation_path.exists())
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(fake.root / "template")
+
+            self.assertFalse(translation_path.exists())
+        self.assertEqual(out.getvalue().strip(), "No digest needed updating.")
 
 
 if __name__ == "__main__":  # pragma: no cover
