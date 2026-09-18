@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import re
 import sys
 from dataclasses import dataclass
@@ -196,32 +197,30 @@ REMOVAL_REFS = {
     "M16": ([".github/FUNDING.yml"], []),
 }
 
-# guidance-layer.md §4.2
+# guidance-layer.md §4.2 (tooling-delta.md §2)
 FIELD_LABELS = [
-    "文件 / Files",
-    "级别 / Level",
-    "选定来源 / Pick",
-    "版本或提交 / Version",
-    "上游许可证 / Upstream license",
-    "认可度证据 / Evidence",
-    "取舍规则 / Rule",
-    "核实日期 / Verified",
+    "Files",
+    "Level",
+    "Pick",
+    "Version",
+    "Upstream license",
+    "Evidence",
+    "Rule",
+    "Verified",
 ]
 
 LEVEL_VALUES = [
-    "必需 / Required",
-    "推荐 / Recommended",
-    "可选 / Optional",
-    "可选（只推荐）/ Optional (recommendation only)",
+    "Required",
+    "Recommended",
+    "Optional",
+    "Optional (recommendation only)",
 ]
 
-# guidance-layer.md §2
-PLACEHOLDER_TABLE_HEADER = (
-    "| 占位符 / Placeholder | 含义 / Meaning | 出现的文件 / Files | 示例 / Example |"
-)
+# guidance-layer.md §2 (tooling-delta.md §2)
+PLACEHOLDER_TABLE_HEADER = "| Placeholder | Meaning | Files | Example |"
 
-# guidance-layer.md §1 §3 §5 §6
-GUIDANCE_HOME_TITLE = "# Chef's Pick OSS Starter · 主厨精选开源仓库起步模板"
+# guidance-layer.md §1 §3 §5 §6 (tooling-delta.md §2)
+GUIDANCE_HOME_TITLE = "# Chef's Pick OSS Starter"
 GUIDE_EXTRA_HEADINGS = [
     "Adding language-specific rules",
     "Pinning actions",
@@ -248,13 +247,16 @@ UPGRADE_HEADINGS = [
 
 # Regular expressions
 PLACEHOLDER_RE = re.compile(r"CHANGEME_[A-Z0-9_]+")
+# Detects template-author identity leaking into a generated repository. This
+# is independent of document language -- "主厨精选" can still appear inside
+# the Chinese translations -- so it is kept as-is (tooling-delta.md §2).
 IDENTITY_RE = re.compile(r"(?i)chef'?s[ -]?pick|主厨精选")
 STAR_RE = re.compile(r"★ ([\d,]+) \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\)")
 CJK_RE = re.compile(r"[一-鿿]")
 LATIN_RE = re.compile(r"[A-Za-z]")
 VERSION_HEADING_RE = re.compile(r"^#{1,6} \[(Unreleased|[0-9]+\.[0-9]+\.[0-9]+)\]")
 
-CLEANUP_COMMAND = "git rm -r .github/README.md .github/chefs-pick"
+CLEANUP_COMMAND = "git rm -r .github/README.md .github/README.zh-CN.md .github/chefs-pick"
 
 ADOPTION_START = "<!-- adoption-data:start -->"
 ADOPTION_END = "<!-- adoption-data:end -->"
@@ -264,6 +266,33 @@ SUMMARY_END = "<!-- summary:end -->"
 FRESH_DAYS = 183
 RELEASE_FRESH_DAYS = 30
 
+# tooling-delta.md §2 -- language-structure.md-derived constants for
+# discovering and validating translations of the bootstrap-guidance layer.
+TRANSLATED_DOCS = {".github/README.md", ".github/chefs-pick/SETUP.md"}
+SELECTOR_LINES = {  # path -> verbatim language-selector line, language-structure.md §1
+    ".github/README.md": "**English** · [简体中文](README.zh-CN.md)",
+    ".github/README.zh-CN.md": "[English](README.md) · **简体中文**",
+    ".github/chefs-pick/SETUP.md": "**English** · [简体中文](SETUP.zh-CN.md)",
+    ".github/chefs-pick/SETUP.zh-CN.md": "[English](SETUP.md) · **简体中文**",
+}
+ANCHOR_RE = re.compile(r"^<!-- anchor: ([a-z0-9][a-z0-9-]*) -->$")
+DIGEST_RE = re.compile(r"^<!-- translation-of: (\S+) sha256:([0-9a-f]{16}) -->$")
+ANCHOR_SEQUENCES = {  # language-structure.md §3
+    "README": ["chefs-pick-oss-starter", "what-you-get", "required", "recommended",
+               "optional", "the-picks-at-a-glance", "how-we-pick", "quick-start",
+               "good-to-know", "clean-up-when-done", "feedback-and-contact", "license"],
+    "SETUP": ["setup-checklist", "placeholders", "steps"],
+}
+SINGLE_SOURCE_MARKERS = ["| Placeholder | Meaning | Files | Example |",
+                         "<!-- summary:start -->", "<!-- adoption-data:start -->"]
+
+# Translation filenames: "<id>.<lang>.md" with a sibling "<id>.md" in the
+# same directory (tooling-delta.md §1.3, research.md R12). The language
+# list is deliberately not hard-coded.
+TRANSLATION_FILENAME_RE = re.compile(
+    r"^(?P<id>[A-Za-z-]+)\.(?P<lang>[a-z]{2}(-[A-Z]{2})?)\.md$"
+)
+
 
 # --------------------------------------------------------------------------
 # Framework
@@ -272,6 +301,15 @@ RELEASE_FRESH_DAYS = 30
 
 class SkipCheck(Exception):
     """Raised by a check function when it has nothing to check."""
+
+
+class WarnCheck(Exception):
+    """Raised by a check function to report non-blocking problems.
+
+    ``args[0]`` is the list of problems, exactly like a normal FAIL return.
+    See tooling-delta.md §1.1: WARN never affects the exit code unless
+    ``--release`` is set, in which case it is counted as FAIL.
+    """
 
 
 @dataclass
@@ -300,6 +338,29 @@ def iter_files(root: Path) -> list[str]:
 
 def project_files(ctx: Context) -> list[str]:
     return [p for p in iter_files(ctx.template_dir) if not is_guidance(p)]
+
+
+def find_translations(root: Path) -> dict[str, str]:
+    """Discover translations inside the bootstrap-guidance layer.
+
+    Returns ``{translation_rel_path: source_rel_path}``. A file is a
+    translation of ``<id>.md`` when its name matches
+    ``TRANSLATION_FILENAME_RE`` and ``<id>.md`` exists next to it
+    (tooling-delta.md §1.3, research.md R12). The language list is not
+    hard-coded: any two-letter (optionally regionalised) language tag is
+    accepted.
+    """
+    translations: dict[str, str] = {}
+    for rel in iter_files(root):
+        if not is_guidance(rel):
+            continue
+        match = TRANSLATION_FILENAME_RE.match(Path(rel).name)
+        if not match:
+            continue
+        source_rel = str(Path(rel).with_name(f"{match.group('id')}.md").as_posix())
+        if (root / source_rel).is_file():
+            translations[rel] = source_rel
+    return translations
 
 
 def read_text(path: Path) -> str:
@@ -344,6 +405,88 @@ def parse_date(value: str) -> _dt.date | None:
         return _dt.date.fromisoformat(value.strip())
     except ValueError:
         return None
+
+
+# --------------------------------------------------------------------------
+# Language-purity helpers (tooling-delta.md §1.3/§3, research.md R6)
+# --------------------------------------------------------------------------
+
+_FENCE_TOGGLE_RE = re.compile(r"^\s*```")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`]*`")
+_MD_LINK_TARGET_RE = re.compile(r"(\[[^\]]*\])\([^)]*\)")
+_BARE_URL_RE = re.compile(r"https?://\S+")
+_ENGLISH_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'’-]*")
+# The allowed separator between two words in the same "run": the ASCII
+# punctuation/space/tab set from research.md R6, plus single newlines (a
+# blank line -- two or more newlines -- still breaks the run).
+_ALLOWED_RUN_SEP_RE = re.compile(r"^[ \t\n,.;:!?()'\"-]*$")
+_PARAGRAPH_BREAK_RE = re.compile(r"\n[ \t]*\n")
+
+
+def _strip_fenced_code(text: str) -> str:
+    """Delete fenced code blocks, including the fence lines themselves."""
+    out = []
+    in_fence = False
+    for line in text.split("\n"):
+        if _FENCE_TOGGLE_RE.match(line):
+            in_fence = not in_fence
+            continue
+        if not in_fence:
+            out.append(line)
+    return "\n".join(out)
+
+
+def strip_for_purity(text: str, selector_line: str | None) -> str:
+    """Strip everything research.md R6 excludes from the purity judgement.
+
+    In order: fenced code blocks (fence lines included), HTML comments,
+    inline code, the ``(target)`` half of Markdown links, bare URLs, and
+    finally the language-selector line itself. The selector line is
+    matched after the same link-target stripping has been applied to it,
+    since by the time step 6 runs, step 4 has already rewritten that line
+    in *text* the same way -- an exact match against the untouched
+    ``selector_line`` string would otherwise never hit.
+    """
+    text = _strip_fenced_code(text)
+    text = _HTML_COMMENT_RE.sub("", text)
+    text = _INLINE_CODE_RE.sub("", text)
+    text = _MD_LINK_TARGET_RE.sub(r"\1", text)
+    text = _BARE_URL_RE.sub("", text)
+    if selector_line is not None:
+        stripped_selector = _MD_LINK_TARGET_RE.sub(r"\1", selector_line)
+        text = "\n".join(
+            line for line in text.split("\n") if line != stripped_selector
+        )
+    return text
+
+
+def cjk_count(text: str) -> int:
+    """Count of CJK Unified Ideographs (U+4E00-U+9FFF) in *text*."""
+    return len(CJK_RE.findall(text))
+
+
+def longest_english_run(text: str) -> int:
+    """Longest run of consecutive English words in *text* (research.md R6).
+
+    A word is ``[A-Za-z][A-Za-z'’-]*``. Two words are part of the same
+    run when only characters from ``[ \\t,.;:!?()'"-]`` (repeatable) or a
+    single newline separate them; a blank line or any other character
+    (including CJK text or full-width punctuation) breaks the run.
+    """
+    words = list(_ENGLISH_WORD_RE.finditer(text))
+    if not words:
+        return 0
+    longest = current = 1
+    for prev, nxt in zip(words, words[1:]):
+        between = text[prev.end():nxt.start()]
+        continues = (
+            _ALLOWED_RUN_SEP_RE.match(between) is not None
+            and _PARAGRAPH_BREAK_RE.search(between) is None
+        )
+        current = current + 1 if continues else 1
+        longest = max(longest, current)
+    return longest
 
 
 # --------------------------------------------------------------------------
@@ -957,7 +1100,7 @@ def check_c11(ctx: Context) -> list[str]:
             CLEANUP_COMMAND,
             "chefs-pick/SETUP.md",
             "chefs-pick/GUIDE.md",
-            "## 反馈与联系 / Feedback and contact",
+            "## Feedback and contact",
         ):
             if needed not in text:
                 problems.append(f"{home_rel}: missing required string: {needed}")
@@ -1063,7 +1206,7 @@ def check_c12(ctx: Context) -> list[str]:
     summary_lines = _between(home_text, SUMMARY_START, SUMMARY_END)
     summary_rows = _table_rows(summary_lines) if summary_lines else []
     # The summary table's header row is not data.
-    summary_data = [r for r in summary_rows if r[0] != "模块 / Module"]
+    summary_data = [r for r in summary_rows if r[0] != "Module"]
     if not summary_data:
         raise SkipCheck(
             f"{GUIDANCE_FILE}: the summary table has no data rows yet "
@@ -1089,9 +1232,9 @@ def check_c12(ctx: Context) -> list[str]:
         problems.append(f"{GUIDANCE_FILE}: must link chefs-pick/SOURCES.md")
 
     # 1. The single "data verified" line.
-    match = re.search(r"数据核实日期 / Data verified:\s*(\d{4}-\d{2}-\d{2})", text)
+    match = re.search(r"Data verified:\s*(\d{4}-\d{2}-\d{2})", text)
     if not match:
-        problems.append(f"{sources_rel}: missing the '数据核实日期 / Data verified:' line")
+        problems.append(f"{sources_rel}: missing the 'Data verified:' line")
     else:
         check_date(match.group(1), f"{sources_rel}: data verified line")
 
@@ -1151,12 +1294,12 @@ def check_c12(ctx: Context) -> list[str]:
         sections[current] = "\n".join(buffer)
 
     evidence_types = [
-        "精确 Star 数 / Exact stars",
-        "四舍五入 Star 数 / Rounded stars",
-        "估算使用人数 / Estimated users",
-        "平台官方功能 / Official platform feature",
-        "事实标准 / De facto standard",
-        "未取得 / Not available",
+        "Exact stars",
+        "Rounded stars",
+        "Estimated users",
+        "Official platform feature",
+        "De facto standard",
+        "Not available",
     ]
 
     for index in range(1, 17):
@@ -1168,22 +1311,22 @@ def check_c12(ctx: Context) -> list[str]:
 
         fields = {}
         for row in _table_rows(section.splitlines()):
-            if len(row) >= 2 and row[0] != "字段 / Field":
+            if len(row) >= 2 and row[0] != "Field":
                 fields[row[0]] = row[1]
 
         for label in FIELD_LABELS:
             if label not in fields:
                 problems.append(f"{sources_rel}: {module} is missing the field: {label}")
 
-        level = fields.get("级别 / Level")
+        level = fields.get("Level")
         if level is not None and level not in LEVEL_VALUES:
             problems.append(f"{sources_rel}: {module} has an invalid level: {level}")
 
-        verified = fields.get("核实日期 / Verified")
+        verified = fields.get("Verified")
         if verified is not None:
             check_date(verified, f"{sources_rel}: {module} verified cell")
 
-        evidence = fields.get("认可度证据 / Evidence", "")
+        evidence = fields.get("Evidence", "")
         if evidence and not any(label in evidence for label in evidence_types):
             problems.append(
                 f"{sources_rel}: {module} evidence cell has no registered evidence type"
@@ -1196,7 +1339,9 @@ def check_c12(ctx: Context) -> list[str]:
                     f"{sources_rel}: {module}'s chosen source {repo} is archived"
                 )
 
-        for marker, label in (("**入选理由**", "入选理由"), ("**Rationale**", "Rationale")):
+        # Now that SOURCES.md is English-only there is a single "Rationale"
+        # paragraph per module (tooling-delta.md §4 C12), not a bilingual pair.
+        for marker, label in (("**Rationale**", "Rationale"),):
             if marker not in section:
                 problems.append(f"{sources_rel}: {module} has no {label} paragraph")
                 continue
@@ -1208,14 +1353,15 @@ def check_c12(ctx: Context) -> list[str]:
                     f"{sources_rel}: {module} has no non-empty {label} paragraph"
                 )
 
-        alt = section.split("**备选方案 / Alternatives**", 1)
+        alt = section.split("**Alternatives**", 1)
         if len(alt) < 2 or not re.search(r"^\s*[-*]\s+\S", alt[1], re.MULTILINE):
             problems.append(f"{sources_rel}: {module} needs at least one alternative")
 
-        rule = (fields.get("取舍规则 / Rule") or "").strip()
-        if rule == "2" and "认可度相当" not in section:
+        rule = (fields.get("Rule") or "").strip()
+        if rule == "2" and "comparable adoption" not in section:
             problems.append(
-                f"{sources_rel}: {module} uses rule 2, so its 入选理由 must state 认可度相当"
+                f"{sources_rel}: {module} uses rule 2, so its Rationale must state "
+                "comparable adoption"
             )
 
     # 5. The home page summary table: exactly 16 rows, M01..M16 in order.
@@ -1235,7 +1381,7 @@ def check_c12(ctx: Context) -> list[str]:
             check_date(row[3], f"{GUIDANCE_FILE}: summary row {expected}")
 
     # 6. The excluded-candidates section.
-    excluded_heading = "## 排除的候选 / Excluded candidates"
+    excluded_heading = "## Excluded candidates"
     if excluded_heading not in text:
         problems.append(f"{sources_rel}: missing the '{excluded_heading}' section")
     else:
@@ -1243,7 +1389,7 @@ def check_c12(ctx: Context) -> list[str]:
         rows = [
             r
             for r in _table_rows(body.splitlines())
-            if r[0] != "候选 / Candidate"
+            if r[0] != "Candidate"
         ]
         if len(rows) < 8:
             problems.append(
@@ -1580,6 +1726,46 @@ def check_c22(ctx: Context) -> list[str]:
     return problems
 
 
+def update_digests(template_dir: Path) -> None:
+    """Refresh every translation's source-marker digest in place.
+
+    Only the ``<!-- translation-of: ... sha256:... -->`` line is rewritten;
+    every other byte of the file is left untouched
+    (tooling-delta.md §1.2).
+    """
+    any_updated = False
+    for translation_rel, source_rel in sorted(find_translations(template_dir).items()):
+        source_path = template_dir / source_rel
+        digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
+        source_name = Path(source_rel).name
+
+        translation_path = template_dir / translation_rel
+        raw = translation_path.read_bytes()
+        text = raw.decode("utf-8")
+        newline = "\r\n" if "\r\n" in text else "\n"
+        lines = text.split(newline)
+
+        changed = False
+        old_digest = None
+        for index, line in enumerate(lines):
+            match = DIGEST_RE.match(line)
+            if not match or match.group(1) != source_name:
+                continue
+            old_digest = match.group(2)
+            if old_digest != digest:
+                lines[index] = f"<!-- translation-of: {source_name} sha256:{digest} -->"
+                changed = True
+            break
+
+        if changed:
+            translation_path.write_text(newline.join(lines), encoding="utf-8")
+            print(f"{translation_rel}: {old_digest} -> {digest}")
+            any_updated = True
+
+    if not any_updated:
+        print("No digest needed updating.")
+
+
 CHECKS = {
     "C01": ("Layout", lambda ctx: check_c01(ctx)),
     "C02": ("No development files", lambda ctx: check_c02(ctx)),
@@ -1620,6 +1806,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--today", default=None)
     parser.add_argument("--only", default=None)
     parser.add_argument("--files", default=None)
+    parser.add_argument("--update-digests", action="store_true")
     return parser
 
 
@@ -1634,6 +1821,10 @@ def main(argv: list[str] | None = None) -> int:
     if not template_dir.is_dir():
         print(f"error: template directory not found: {template_dir}", file=sys.stderr)
         return 2
+
+    if args.update_digests:
+        update_digests(template_dir)
+        return 0
 
     if args.today is None:
         today = _dt.date.today()
@@ -1661,7 +1852,7 @@ def main(argv: list[str] | None = None) -> int:
         template_dir=template_dir, release=args.release, today=today, files=files
     )
 
-    passed = failed = skipped = 0
+    passed = failed = warned = skipped = 0
     for cid in ids:
         title, func = CHECKS[cid]
         try:
@@ -1669,6 +1860,20 @@ def main(argv: list[str] | None = None) -> int:
         except SkipCheck as exc:
             print(f"SKIP {cid} {title}: {exc}")
             skipped += 1
+            continue
+        except WarnCheck as exc:
+            problems = exc.args[0]
+            # --release promotes a WARN to a FAIL (tooling-delta.md §1.1).
+            if ctx.release:
+                print(f"FAIL {cid} {title}")
+                for problem in problems:
+                    print(f"  - {problem}")
+                failed += 1
+            else:
+                print(f"WARN {cid} {title}")
+                for problem in problems:
+                    print(f"  - {problem}")
+                warned += 1
             continue
         if problems:
             print(f"FAIL {cid} {title}")
@@ -1679,7 +1884,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"PASS {cid} {title}")
             passed += 1
 
-    print(f"Summary: {passed} passed, {failed} failed, {skipped} skipped")
+    print(f"Summary: {passed} passed, {failed} failed, {warned} warned, {skipped} skipped")
     return 1 if failed else 0
 
 
