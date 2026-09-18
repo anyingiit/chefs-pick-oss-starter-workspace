@@ -358,11 +358,15 @@ def find_translations(root: Path) -> dict[str, str]:
     """Discover translations inside the bootstrap-guidance layer.
 
     Returns ``{translation_rel_path: source_rel_path}``. A file is a
-    translation of ``<id>.md`` when its name matches
-    ``TRANSLATION_FILENAME_RE`` and ``<id>.md`` exists next to it
-    (tooling-delta.md §1.3, research.md R12). The language list is not
-    hard-coded: any two-letter (optionally regionalised) language tag is
-    accepted.
+    translation of ``<id>.md`` whenever its name matches
+    ``TRANSLATION_FILENAME_RE`` (tooling-delta.md §1.3, research.md R12);
+    the paired ``<id>.md`` source is *not* required to already exist for
+    the file to be registered here. Whether the declared source actually
+    exists is a correctness question for callers to judge -- notably
+    C24, which must FAIL (tooling-delta.md §5) rather than silently lose
+    track of a translation whose source is missing. The language list is
+    not hard-coded: any two-letter (optionally regionalised) language tag
+    is accepted.
     """
     translations: dict[str, str] = {}
     for rel in iter_files(root):
@@ -372,8 +376,7 @@ def find_translations(root: Path) -> dict[str, str]:
         if not match:
             continue
         source_rel = str(Path(rel).with_name(f"{match.group('id')}.md").as_posix())
-        if (root / source_rel).is_file():
-            translations[rel] = source_rel
+        translations[rel] = source_rel
     return translations
 
 
@@ -2035,6 +2038,15 @@ def update_digests(template_dir: Path) -> None:
     any_updated = False
     for translation_rel, source_rel in sorted(find_translations(template_dir).items()):
         source_path = template_dir / source_rel
+        if not source_path.is_file():
+            # find_translations() registers a translation by filename
+            # convention alone (tooling-delta.md §1.3); a missing source is
+            # a C24 FAIL to be reported by check_template.py, not something
+            # --update-digests can compute a digest for. Skip it here.
+            print(
+                f"{translation_rel}: skipped (source not found: {source_rel})"
+            )
+            continue
         digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
         source_name = Path(source_rel).name
 

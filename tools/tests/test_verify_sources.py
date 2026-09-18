@@ -187,11 +187,22 @@ class TempTemplateCase(unittest.TestCase):
         }
 
     def run_main(self, *args) -> tuple[int, str]:
-        """Run ``main`` with the temp template dir; return (exit code, output)."""
+        """Run ``main`` with the temp template dir; return (exit code, output).
+
+        ``repo_root()`` is patched to this same temp directory for the
+        duration of the call. ``main()`` resolves the verbatim contract
+        (tooling-delta.md §6) from ``repo_root()``, deliberately independent
+        of ``--template-dir`` -- so without this patch a ``--write`` run
+        here would reach through to the *real* repository's
+        ``specs/001-chefs-pick-starter/contracts/guidance-layer.md`` instead
+        of staying inside the throwaway directory. See
+        ``RealContractUntouchedTests`` for the regression guard.
+        """
         out, err = io.StringIO(), io.StringIO()
         argv = ["--template-dir", str(self.root), "--today", TODAY.isoformat()]
         argv.extend(args)
-        with redirect_stdout(out), redirect_stderr(err):
+        with mock.patch.object(vs, "repo_root", return_value=self.root), \
+                redirect_stdout(out), redirect_stderr(err):
             code = vs.main(argv)
         return code, out.getvalue() + err.getvalue()
 
@@ -556,6 +567,71 @@ class MissingContractFileTests(TempTemplateCase):
             code, output = self.run_main()
         self.assertEqual(code, 0)
         self.assertIn("note: contract file not found, skipped:", output)
+
+
+class RealContractUntouchedTests(TempTemplateCase):
+    """Regression guard for the test-isolation bug fixed alongside T018/T019.
+
+    ``main()`` deliberately resolves the verbatim contract (§6 of
+    ``specs/002-english-first-docs/contracts/tooling-delta.md``) from
+    ``repo_root()``, independent of ``--template-dir`` -- that part is
+    correct production behaviour. But it means any test that drives
+    ``main(["--write", ...])`` without also pointing ``repo_root()`` at a
+    throwaway directory silently writes through to the *real*
+    ``specs/001-chefs-pick-starter/contracts/guidance-layer.md``. That is
+    exactly what happened before ``TempTemplateCase.run_main`` patched
+    ``repo_root()``: a run using fixture data (``★ 16,500`` /
+    ``★ 176,000``) corrupted the genuine contract file on disk.
+
+    This test exercises the same ``--write`` + contract-present path against
+    a private fixture contract inside ``self.root``, and independently
+    confirms the real repository file was not touched at all -- neither its
+    content nor its mtime. If ``run_main`` (or any future test) ever drops
+    the ``repo_root()`` patch, this is the test that must fail.
+    """
+
+    REAL_CONTRACT = Path(__file__).resolve().parents[2] / vs.CONTRACT_REL
+
+    def test_write_run_leaves_the_real_contract_file_untouched(self) -> None:
+        before_text = self.REAL_CONTRACT.read_text(encoding="utf-8")
+        before_mtime_ns = self.REAL_CONTRACT.stat().st_mtime_ns
+
+        write_template(self.root)
+        # A private fixture contract inside the temp root -- using the same
+        # star counts the real contract happens to hold for these repos, so
+        # a failure to isolate would corrupt the real file the same way the
+        # original bug did.
+        fixture_contract = self.root / vs.CONTRACT_REL
+        fixture_contract.parent.mkdir(parents=True, exist_ok=True)
+        fixture_contract.write_text(
+            "★ 16,360 (othneildrew/Best-README-Template) and "
+            "★ 175,810 (github/gitignore).",
+            encoding="utf-8",
+        )
+
+        fetched = {
+            "othneildrew/Best-README-Template": payload(
+                "othneildrew/Best-README-Template", stars=16_500
+            ),
+            "github/gitignore": payload("github/gitignore", stars=176_000),
+        }
+        with mock.patch.object(vs, "gh_ready", return_value=True), mock.patch.object(
+            vs, "fetch_repo", side_effect=lambda slug: fetched[slug]
+        ):
+            code, _output = self.run_main("--write")
+        self.assertEqual(code, 0)
+
+        # The contract-writing branch did run, against the fixture only.
+        after_fixture = fixture_contract.read_text(encoding="utf-8")
+        self.assertIn("★ 16,500 (othneildrew/Best-README-Template)", after_fixture)
+        self.assertIn("★ 176,000 (github/gitignore)", after_fixture)
+
+        # The real repository contract is byte-for-byte and mtime-for-mtime
+        # unchanged.
+        after_text = self.REAL_CONTRACT.read_text(encoding="utf-8")
+        after_mtime_ns = self.REAL_CONTRACT.stat().st_mtime_ns
+        self.assertEqual(after_text, before_text)
+        self.assertEqual(after_mtime_ns, before_mtime_ns)
 
 
 if __name__ == "__main__":

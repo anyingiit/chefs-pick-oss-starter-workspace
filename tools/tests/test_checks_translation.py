@@ -162,23 +162,45 @@ class TestC24TranslationFreshness(unittest.TestCase):
         self.assertEqual(status, "SKIP", reason)
 
     # ------------------------------------------------------------------
-    # NOT COVERED, and deliberately so -- see the report to the caller:
+    # FIXED: tooling-delta.md §5 C24 also requires a FAIL when "the source
+    # marker names a source file that does not exist". check_c24's own
+    # source code always contained that branch (the
+    # `if not source_path.is_file():` check right after a marker is
+    # matched), but it used to be unreachable through the public
+    # Context-based API: check_c24 only ever iterates
+    # `find_translations(root).items()`, and find_translations() used to
+    # register a (translation, source) pair only when
+    # `(root / source_rel).is_file()` was already True. So a translation
+    # whose declared source was missing was invisible to check_c24 -- it
+    # was not iterated at all, and (if it was the only translation
+    # present) the check reported SKIP ("no translation is present")
+    # rather than FAIL.
     #
-    # tooling-delta.md §5 C24 also requires a FAIL when "the source marker
-    # names a source file that does not exist". check_c24's own source
-    # code does contain that branch (the `if not source_path.is_file():`
-    # check right after a marker is matched), but it is unreachable through
-    # the public Context-based API: check_c24 only ever iterates
-    # `find_translations(root).items()`, and find_translations() itself
-    # only registers a (translation, source) pair when
-    # `(root / source_rel).is_file()` is already True. So by the time
-    # check_c24's loop body runs, source_path.is_file() is guaranteed True,
-    # and a translation whose declared source is missing is invisible to
-    # check_c24 -- it is not iterated at all, and (if it is the only
-    # translation present) the check reports SKIP ("no translation is
-    # present") rather than FAIL. This was confirmed empirically before
-    # writing this suite; see the accompanying report.
+    # find_translations() now registers a translation by filename
+    # convention alone, regardless of whether its declared source exists,
+    # so check_c24 can see it and apply the missing-source FAIL branch.
+    # See test_missing_source_file_fails_not_skips below.
     # ------------------------------------------------------------------
+
+    def test_missing_source_file_fails_not_skips(self) -> None:
+        # The translation exists and has a well-formed marker, but the
+        # source file it names is not present anywhere in the tree.
+        digest = source_digest()
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(
+                tmp,
+                {
+                    TRANSLATION_REL: translation_text(marker(digest)),
+                },
+            )
+            self.assertFalse((Path(tmp) / SOURCE_REL).exists())
+
+            status, problems = run_one("C24", make_ctx(tmp))
+        self.assertEqual(status, "FAIL", problems)
+        self.assertTrue(
+            any("README.md" in p and "does not exist" in p for p in problems),
+            problems,
+        )
 
 
 class TestUpdateDigests(unittest.TestCase):
