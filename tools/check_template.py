@@ -11,6 +11,7 @@ import argparse
 import datetime as _dt
 import hashlib
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -2126,6 +2127,93 @@ def check_c24(ctx: Context) -> list[str]:
     return []
 
 
+def _workspace_gate(repo_root: Path) -> tuple[str | None, str | None, list[str]]:
+    """Resolve README.md / README.zh-CN.md for C25/C26/C27's shared gate.
+
+    tooling-delta-003.md §2 (corrected -- see Finding 2 in
+    tooling-delta-003.md §2 for the full rationale): the *only* condition
+    under which C25, C26 and C27 raise ``SkipCheck`` is ``template/`` not
+    existing at all -- i.e. this is not the workspace repository. A
+    missing ``README.md``, or one that lacks the verbatim
+    ``WORKSPACE_SELECTOR_LINES["README.md"]`` line, is a structural FAIL,
+    never a skip: skipping either of those let a single deleted or
+    misspelled line silently turn off all three checks.
+
+    Returns ``(source_text, translation_text, problems)``. When the gate
+    itself fails, ``source_text`` is ``None`` and ``problems`` already
+    holds the one FAIL message naming what is missing -- callers must
+    return ``problems`` as-is in that case. Otherwise ``problems`` is
+    ``[]`` and ``translation_text`` is ``None`` only when
+    ``README.zh-CN.md`` does not exist (callers decide how to report
+    that, since C25/C26/C27 phrase it slightly differently).
+    """
+    template_dir = repo_root / "template"
+    if not template_dir.is_dir():
+        raise SkipCheck(f"missing {template_dir}")
+
+    source_path = repo_root / WORKSPACE_SOURCE
+    translation_path = repo_root / WORKSPACE_TRANSLATION
+
+    if not source_path.is_file():
+        return None, None, [f"{WORKSPACE_SOURCE}: file does not exist"]
+
+    source_text = read_text(source_path)
+    expected = WORKSPACE_SELECTOR_LINES[WORKSPACE_SOURCE]
+    if expected not in source_text.splitlines():
+        return None, None, [
+            f"{WORKSPACE_SOURCE}: language selector: missing the verbatim "
+            f"line {expected!r}"
+        ]
+
+    translation_text = read_text(translation_path) if translation_path.is_file() else None
+    return source_text, translation_text, []
+
+
+def _git_tracked_file_count(repo_root: Path, subpath: str) -> int:
+    """Count of git-tracked files under ``repo_root / subpath``.
+
+    tooling-delta-003.md §4 C26 declares the ``template/`` file count as
+    "被 git 跟踪的文件数" (the count of git-tracked files), not a raw
+    filesystem walk -- ``iter_files`` also counts untracked files, so a
+    stray untracked file under ``template/`` (a scratch file, a build
+    artefact) would make a correct declaration look wrong. This runs git
+    from *repo_root* rather than falling back to a filesystem walk when
+    git is unavailable, since a fallback could silently give a different
+    (wrong) answer instead of failing loudly.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo_root), "ls-files", "--", subpath],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SkipCheck(
+            f"unable to run `git -C {repo_root} ls-files -- {subpath}`: {exc}"
+        ) from exc
+    return len([line for line in result.stdout.splitlines() if line])
+
+
+def _marker_candidates(text: str, source_name: str) -> list[re.Match]:
+    """Lines in *text* that purport to be a ``translation-of`` marker for
+    *source_name*, whether or not the digest portion is well-formed.
+
+    ``DIGEST_RE`` alone only recognises a *well-formed* marker line
+    (exactly 16 lowercase hex digits), so a well-formed marker sitting
+    next to a malformed duplicate for the same source is invisible to
+    code that looks only for ``DIGEST_RE`` matches: the malformed line is
+    silently ignored instead of tripping the "more than one marker" FAIL.
+    Detecting this broader set of *candidate* marker lines first lets a
+    duplicate be caught even when it is malformed. Matching group 1 is
+    the (possibly malformed) digest text.
+    """
+    candidate_re = re.compile(
+        r"^<!-- translation-of: " + re.escape(source_name) + r" sha256:(\S*) -->$"
+    )
+    return [m for m in (candidate_re.match(line) for line in text.splitlines()) if m]
+
+
 def check_c25(ctx: Context) -> list[str]:
     """The workspace homepage's own language structure (tooling-delta-003.md §3 C25).
 
@@ -2134,28 +2222,21 @@ def check_c25(ctx: Context) -> list[str]:
     ``ctx.template_dir`` -- the workspace homepage (``README.md``) lives
     outside ``template/``, same rationale as check_c23.
 
-    Skip condition (tooling-delta-003.md §2): ``template/`` missing,
-    ``README.md`` missing, or ``README.md`` missing the verbatim
-    language-selector line -- i.e. whether this feature's conversion has
-    begun. A missing translation is deliberately *not* a skip condition
-    once the selector is in place: that is a FAIL, since the selector then
-    points at a file that does not exist.
+    Skip condition (tooling-delta-003.md §2, corrected by Finding 2):
+    ``template/`` missing is the *only* SkipCheck condition now. A missing
+    ``README.md``, or one that is missing the verbatim language-selector
+    line, is a FAIL (see ``_workspace_gate``). A missing translation is
+    likewise *not* a skip condition: that is a FAIL, since the selector
+    then points at a file that does not exist.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    template_dir = repo_root / "template"
-    source_path = repo_root / WORKSPACE_SOURCE
-    translation_path = repo_root / WORKSPACE_TRANSLATION
+    source_text, translation_text, problems = _workspace_gate(repo_root)
+    if source_text is None:
+        return problems
 
-    if not template_dir.is_dir() or not source_path.is_file():
-        raise SkipCheck(f"missing {template_dir} or {source_path}")
-    source_text = read_text(source_path)
-    if WORKSPACE_SELECTOR_LINES[WORKSPACE_SOURCE] not in source_text.splitlines():
-        raise SkipCheck(f"{WORKSPACE_SOURCE}: language-selector line not present yet")
-
-    problems: list[str] = []
     texts = {WORKSPACE_SOURCE: source_text}
-    if translation_path.is_file():
-        texts[WORKSPACE_TRANSLATION] = read_text(translation_path)
+    if translation_text is not None:
+        texts[WORKSPACE_TRANSLATION] = translation_text
     else:
         problems.append(f"{WORKSPACE_TRANSLATION}: file does not exist")
 
@@ -2255,27 +2336,30 @@ def check_c26(ctx: Context) -> list[str]:
     root (the script's own parent directory's parent), never to
     ``ctx.template_dir`` -- same rationale as check_c23 and check_c25.
 
-    Skip condition (tooling-delta-003.md §2): same as check_c25 -- this is
-    keyed on whether the language selector is in place in ``README.md``,
-    not on whether the translation exists.
+    Skip condition (tooling-delta-003.md §2, corrected by Finding 2): same
+    as check_c25 -- ``template/`` missing is the only SkipCheck condition;
+    a missing ``README.md`` or a missing selector line is a FAIL (see
+    ``_workspace_gate``). A missing ``README.zh-CN.md`` is also a FAIL
+    (Finding 6), naming the missing file, rather than being silently
+    dropped from the set of files this check validates.
+
+    The declared ``template/`` file count (tooling-delta-003.md §4.1) is
+    compared against the count of git-tracked files under ``template/``
+    (Finding 4), not a filesystem walk -- an untracked scratch file must
+    not make a correct declaration look wrong.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    template_dir = repo_root / "template"
-    source_path = repo_root / WORKSPACE_SOURCE
-    translation_path = repo_root / WORKSPACE_TRANSLATION
+    source_text, translation_text, problems = _workspace_gate(repo_root)
+    if source_text is None:
+        return problems
 
-    if not template_dir.is_dir() or not source_path.is_file():
-        raise SkipCheck(f"missing {template_dir} or {source_path}")
-    source_text = read_text(source_path)
-    if WORKSPACE_SELECTOR_LINES[WORKSPACE_SOURCE] not in source_text.splitlines():
-        raise SkipCheck(f"{WORKSPACE_SOURCE}: language-selector line not present yet")
-
-    problems: list[str] = []
     texts = {WORKSPACE_SOURCE: source_text}
-    if translation_path.is_file():
-        texts[WORKSPACE_TRANSLATION] = read_text(translation_path)
+    if translation_text is not None:
+        texts[WORKSPACE_TRANSLATION] = translation_text
+    else:
+        problems.append(f"{WORKSPACE_TRANSLATION}: file does not exist")
 
-    actual_files = len(iter_files(template_dir))
+    actual_files = _git_tracked_file_count(repo_root, "template")
     actual_checks = len(CHECKS)
     spec_dirs = sorted(
         path.name for path in (repo_root / "specs").iterdir() if path.is_dir()
@@ -2332,51 +2416,48 @@ def check_c27(ctx: Context) -> list[str]:
     ``ctx.template_dir`` -- same rationale as check_c23, check_c25 and
     check_c26.
 
-    Skip condition (tooling-delta-003.md §2): same as check_c25 and
-    check_c26 -- keyed on whether the language selector is in place in
-    ``README.md``, not on whether the translation exists.
+    Skip condition (tooling-delta-003.md §2, corrected by Finding 2): same
+    as check_c25 and check_c26 -- ``template/`` missing is the only
+    SkipCheck condition; a missing ``README.md`` or a missing selector
+    line is a FAIL (see ``_workspace_gate``).
+
+    Finding 5: a valid marker line and a malformed duplicate marker line
+    for the same source must both be detected as *candidates* before
+    either is validated, so the malformed duplicate cannot hide behind
+    the valid one and slip through as a PASS -- see ``_marker_candidates``.
     """
     repo_root = Path(__file__).resolve().parent.parent
-    template_dir = repo_root / "template"
-    source_path = repo_root / WORKSPACE_SOURCE
-    translation_path = repo_root / WORKSPACE_TRANSLATION
+    source_text, translation_text, problems = _workspace_gate(repo_root)
+    if source_text is None:
+        return problems
 
-    if not template_dir.is_dir() or not source_path.is_file():
-        raise SkipCheck(f"missing {template_dir} or {source_path}")
-    source_text = read_text(source_path)
-    if WORKSPACE_SELECTOR_LINES[WORKSPACE_SOURCE] not in source_text.splitlines():
-        raise SkipCheck(f"{WORKSPACE_SOURCE}: language-selector line not present yet")
+    malformed_message = [
+        f"{WORKSPACE_TRANSLATION}: missing or malformed source marker for "
+        f"{WORKSPACE_SOURCE} (expected exactly one line "
+        f"'<!-- translation-of: {WORKSPACE_SOURCE} sha256:<16 hex> -->')"
+    ]
 
-    if not translation_path.is_file():
+    if translation_text is None:
+        return malformed_message
+
+    candidates = _marker_candidates(translation_text, WORKSPACE_SOURCE)
+
+    if not candidates:
+        return malformed_message
+
+    if len(candidates) > 1:
         return [
-            f"{WORKSPACE_TRANSLATION}: missing or malformed source marker for "
-            f"{WORKSPACE_SOURCE} (expected exactly one line "
-            f"'<!-- translation-of: {WORKSPACE_SOURCE} sha256:<16 hex> -->')"
-        ]
-
-    text = read_text(translation_path)
-    digest_matches = []
-    for line in text.splitlines():
-        match = DIGEST_RE.match(line)
-        if match and match.group(1) == WORKSPACE_SOURCE:
-            digest_matches.append(match)
-
-    if not digest_matches:
-        return [
-            f"{WORKSPACE_TRANSLATION}: missing or malformed source marker for "
-            f"{WORKSPACE_SOURCE} (expected exactly one line "
-            f"'<!-- translation-of: {WORKSPACE_SOURCE} sha256:<16 hex> -->')"
-        ]
-
-    if len(digest_matches) > 1:
-        return [
-            f"{WORKSPACE_TRANSLATION}: found {len(digest_matches)} source "
+            f"{WORKSPACE_TRANSLATION}: found {len(candidates)} source "
             f"marker lines for {WORKSPACE_SOURCE} (expected exactly one line "
             f"'<!-- translation-of: {WORKSPACE_SOURCE} sha256:<16 hex> -->')"
         ]
 
-    digest_match = digest_matches[0]
-    recorded_digest = digest_match.group(2)
+    candidate = candidates[0]
+    recorded_digest = candidate.group(1)
+    if not re.fullmatch(r"[0-9a-f]{16}", recorded_digest):
+        return malformed_message
+
+    source_path = repo_root / WORKSPACE_SOURCE
     actual_digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
     if recorded_digest != actual_digest:
         message = (
@@ -2415,10 +2496,19 @@ def _refresh_translation_digest(
     # §1.2). Using a regex over the whole decoded text, rather than
     # splitting on a single detected newline, also means a file mixing
     # CRLF and LF still has every one of its marker lines found.
+    #
+    # Finding 5: the digest group is deliberately permissive (``\S*``,
+    # not ``[0-9a-f]{16}``) so that a *malformed* duplicate marker is
+    # still counted as a candidate here. Matching only well-formed
+    # markers would let a well-formed marker be refreshed in place while
+    # a malformed duplicate for the same source is silently left behind
+    # -- the file would then have two marker lines for *source_name*, one
+    # of them stale garbage, and update-digests would have reported
+    # success.
     marker_re = re.compile(
         r"(?m)^<!-- translation-of: "
         + re.escape(source_name)
-        + r" sha256:([0-9a-f]{16}) -->(?=\r?$)"
+        + r" sha256:(\S*) -->(?=\r?$)"
     )
     matches = list(marker_re.finditer(text))
 
@@ -2434,6 +2524,12 @@ def _refresh_translation_digest(
 
     match = matches[0]
     old_digest = match.group(1)
+    if not re.fullmatch(r"[0-9a-f]{16}", old_digest):
+        print(
+            f"{translation_rel}: skipped (malformed source marker for "
+            f"{source_name})"
+        )
+        return False
     if old_digest != digest:
         new_line = f"<!-- translation-of: {source_name} sha256:{digest} -->"
         new_text = text[: match.start()] + new_line + text[match.end() :]

@@ -609,7 +609,9 @@ class TestC27WorkspaceTranslationFreshness(unittest.TestCase):
                 )
         self.assertEqual(exit_code, 1)
 
-    def test_missing_selector_in_source_skips(self) -> None:
+    def test_missing_selector_in_source_fails(self) -> None:
+        # The selector is required structure now that the conversion has
+        # shipped; its absence must not quietly disable freshness checking.
         no_selector_source = WORKSPACE_SOURCE_TEXT.replace(
             f"{WORKSPACE_SELECTOR_LINE}\n\n", ""
         )
@@ -621,8 +623,8 @@ class TestC27WorkspaceTranslationFreshness(unittest.TestCase):
                     WORKSPACE_SOURCE_REL: no_selector_source,
                 }
             )
-            status, reason = run_one("C27", make_ctx(fake.root))
-        self.assertEqual(status, "SKIP", reason)
+            status, problems = run_one("C27", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
 
 
 class TestUpdateDigestsWorkspaceBranch(unittest.TestCase):
