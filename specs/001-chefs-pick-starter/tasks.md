@@ -190,11 +190,11 @@ description: "主厨精选开源仓库起步模板的实施任务清单"
   - 数据：`gh api "repos/github/choosealicense.com/contents/_licenses/mit.txt?ref=58267f8f2c5c0099810849cfd7677f52ae0c0eb3" --jq .content | base64 -d`
   - 做法：
     - 删除开头两个 `---` 之间的 front matter 及其后的空行；
-    - 用 `sed -e 's/\[year\]/2026/' -e 's/\[fullname\]/anyingiit/'` 替换两个占位符。方括号必须转义，否则会被 `sed` 当成字符类；
+    - 用 `sed -e 's/\[year\]/CHANGEME_YEAR/' -e 's/\[fullname\]/CHANGEME_COPYRIGHT_HOLDER/'` 替换两个占位符。方括号必须转义，否则会被 `sed` 当成字符类；
     - 不加来源注释。
   - 验收：
     - `python3 tools/check_template.py --only C15,C21 --files LICENSE` 两项 PASS；
-    - `sed -n '3p' template/LICENSE` 输出 `Copyright (c) 2026 anyingiit`。
+    - `sed -n '3p' template/LICENSE` 输出 `Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER`。
 - [X] T018 [P] [US1] 生成 `template/.gitignore`（M03）
   - 读取：contracts/project-files.md 的 M03；research.md §4
   - 做法：
@@ -216,7 +216,7 @@ description: "主厨精选开源仓库起步模板的实施任务清单"
   - 做法：
     1. 用 `printf` 写入来源注释行和一个空行。
     2. 追加 `gh api "repos/EthicalSource/contributor_covenant/contents/content/version/2/1/code_of_conduct.md?ref=7255a28d23d5bc296de2e4e4e9bb5ee1126f1345" --jq .content | base64 -d` 的输出，但要去掉 `+++` front matter 及其后的空行。
-    3. 用 `sed -e 's/\[INSERT CONTACT METHOD\]/leoycwan@gmail.com/'` 替换联系方式占位符（方括号要转义）。
+    3. 用 `sed -e 's/\[INSERT CONTACT METHOD\]/CHANGEME_CONDUCT_EMAIL/'` 替换联系方式占位符（方括号要转义）。
   - 验收：
     - `python3 tools/check_template.py --only C08,C09,C21 --files CODE_OF_CONDUCT.md` 全部 PASS 或 SKIP（C08 同上）；
     - `grep -c 'version 2.1' template/CODE_OF_CONDUCT.md` 输出大于 `0`；

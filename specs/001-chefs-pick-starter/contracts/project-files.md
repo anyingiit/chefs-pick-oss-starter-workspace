@@ -17,22 +17,22 @@
 
 1. 第 1 行：来源注释。
 2. `<a id="readme-top"></a>`。
-3. `# Chefs Pick Oss Starter Workspace`，下一段为 `This is the development and maintenance workspace for the template repository.`。
+3. `# CHANGEME_PROJECT_NAME`，下一段为 `CHANGEME_PROJECT_DESCRIPTION`。
 4. 两个徽章，写在同一段：
-   - `[![CI](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/actions/workflows/ci.yml/badge.svg)](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/actions/workflows/ci.yml)`
-   - `[![License](https://img.shields.io/github/license/anyingiit/chefs-pick-oss-starter-workspace)](LICENSE)`
+   - `[![CI](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/actions/workflows/ci.yml)`
+   - `[![License](https://img.shields.io/github/license/CHANGEME_OWNER/CHANGEME_REPO)](LICENSE)`
 5. 一行两个链接，中间用 ` · ` 分隔：
-   - `[Report a bug](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=bug_report.yml)`
-   - `[Request a feature](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues/new?template=feature_request.yml)`
+   - `[Report a bug](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues/new?template=bug_report.yml)`
+   - `[Request a feature](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues/new?template=feature_request.yml)`
 6. 折叠目录：`<details><summary>Table of Contents</summary>` 中放一个有序列表，依次链接到 `#about-the-project`、`#getting-started`、`#usage`、`#contributing`、`#license`、`#contact`。
-7. `## About The Project`：写 `This is the development and maintenance workspace for the template repository.`，再加一句 "See the [open issues](https://github.com/anyingiit/chefs-pick-oss-starter-workspace/issues) for planned features and known issues."
+7. `## About The Project`：写 `CHANGEME_PROJECT_DESCRIPTION`，再加一句 "See the [open issues](https://github.com/CHANGEME_OWNER/CHANGEME_REPO/issues) for planned features and known issues."
 8. `## Getting Started`，包含两个小节：
    - `### Prerequisites`：列表中只有 `- Git`。
-   - `### Installation`：给出 `git clone https://github.com/anyingiit/chefs-pick-oss-starter-workspace.git` 和 `cd chefs-pick-oss-starter-workspace`，写在 `sh` 代码块中。
-9. `## Usage`：`sh` 代码块，内容为 `chefs-pick-oss-starter-workspace --help`。
+   - `### Installation`：给出 `git clone https://github.com/CHANGEME_OWNER/CHANGEME_REPO.git` 和 `cd CHANGEME_REPO`，写在 `sh` 代码块中。
+9. `## Usage`：`sh` 代码块，内容为 `CHANGEME_USAGE_EXAMPLE`。
 10. `## Contributing`：链接到 `CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`，并说明安全问题见 `SECURITY.md`。三个链接都用相对路径。
 11. `## License`：`Distributed under the MIT License. See [LICENSE](LICENSE) for details.`
-12. `## Contact`：`Project link: [https://github.com/anyingiit/chefs-pick-oss-starter-workspace](https://github.com/anyingiit/chefs-pick-oss-starter-workspace)`。
+12. `## Contact`：`Project link: [https://github.com/CHANGEME_OWNER/CHANGEME_REPO](https://github.com/CHANGEME_OWNER/CHANGEME_REPO)`。
 13. 文件末尾：`<p align="right">(<a href="#readme-top">back to top</a>)</p>`。
 
 **不得包含**：Built With、Roadmap、Acknowledgments、Top contributors（contrib.rocks）、社交账号链接、个人邮箱，以及 [markers.md](./markers.md) §1.3 列出的残留标记。
@@ -41,10 +41,10 @@
 
 取 `github/choosealicense.com@58267f8f2c5c0099810849cfd7677f52ae0c0eb3` 中 `_licenses/mit.txt` 的正文，处理方式如下：
 - 去掉文件开头两个 `---` 之间的 front matter，以及紧随其后的空行。
-- `[year]` 换成 `2026`，`[fullname]` 换成 `anyingiit`。方括号在 `sed` 中是字符类，必须转义，命令为 `sed -e 's/\[year\]/2026/' -e 's/\[fullname\]/anyingiit/'`。
+- `[year]` 换成 `CHANGEME_YEAR`，`[fullname]` 换成 `CHANGEME_COPYRIGHT_HOLDER`。方括号在 `sed` 中是字符类，必须转义，命令为 `sed -e 's/\[year\]/CHANGEME_YEAR/' -e 's/\[fullname\]/CHANGEME_COPYRIGHT_HOLDER/'`。
 - 不加来源注释，其余文字一个字符都不改。
 
-处理后，第 1 行为 `MIT License`，第 3 行为 `Copyright (c) 2026 anyingiit`（C15 检查）。
+处理后，第 1 行为 `MIT License`，第 3 行为 `Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER`（C15 检查）。
 
 ## M03 `.gitignore`（逐字拼接）
 
@@ -78,12 +78,12 @@
 1. 第 1 行：来源注释。第 2 行：空行。
 2. 从第 3 行起，放入 `EthicalSource/contributor_covenant@7255a28d23d5bc296de2e4e4e9bb5ee1126f1345` 中 `content/version/2/1/code_of_conduct.md` 的内容，处理方式如下：
    - 删除开头的 TOML front matter（从第一行 `+++` 到第二行 `+++`，含这两行），并删除紧随其后的空行。
-   - 把 `[INSERT CONTACT METHOD]` 换成 `leoycwan@gmail.com`。删除 front matter 之后全文只有一处；未删除 front matter 时，第 4 行的 `reportingPlaceholder` 也含这个字符串。方括号要转义，命令为 `sed -e 's/\[INSERT CONTACT METHOD\]/leoycwan@gmail.com/'`。
+   - 把 `[INSERT CONTACT METHOD]` 换成 `CHANGEME_CONDUCT_EMAIL`。删除 front matter 之后全文只有一处；未删除 front matter 时，第 4 行的 `reportingPlaceholder` 也含这个字符串。方括号要转义，命令为 `sed -e 's/\[INSERT CONTACT METHOD\]/CHANGEME_CONDUCT_EMAIL/'`。
    - 其余内容一律不改，包括 `## Attribution` 段落及文末的全部链接引用定义。
 
 C16 检查以下几点：
 - 包含 `version 2.1`；
-- 包含 `leoycwan@gmail.com`；
+- 包含 `CHANGEME_CONDUCT_EMAIL`；
 - 不包含 `[INSERT CONTACT METHOD]`；
 - 不包含 `+++`；
 - 包含 `## Attribution`。
@@ -116,8 +116,8 @@ C16 检查以下几点：
 3. `## Supported Versions`：先写一句 "Security updates are provided for the latest release only."，再放一张两行表格：`Latest release | :white_check_mark:` 和 `Older releases | :x:`。
 4. `## Reporting a Vulnerability`，包含以下内容：
    - 加粗句：**Please do not report security vulnerabilities through public issues, discussions, or pull requests.**
-   - 私下报告方式：打开 **Security** 标签页，选择 **Report a vulnerability**；或直接访问 `https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new`。
-   - 备用联系方式："If private vulnerability reporting is unavailable, email leoycwan@gmail.com."
+   - 私下报告方式：打开 **Security** 标签页，选择 **Report a vulnerability**；或直接访问 `https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new`。
+   - 备用联系方式："If private vulnerability reporting is unavailable, email CHANGEME_SECURITY_EMAIL."
    - 报告应包含的信息：漏洞描述与影响、复现步骤或概念验证、受影响的版本。
    - 最后一句："We will acknowledge your report and keep you informed as we investigate and fix the issue."（不承诺具体天数）
 
@@ -227,10 +227,10 @@ body:
 blank_issues_enabled: false
 contact_links:
   - name: Questions and help
-    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/discussions
+    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/discussions
     about: Please ask and answer questions in GitHub Discussions.
   - name: Report a security vulnerability
-    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new
+    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new
     about: Please report security vulnerabilities privately, not in public issues.
 ```
 
@@ -238,7 +238,7 @@ C04 检查以下内容：
 - 两个表单都有非空的 `name`、`description`、`labels` 和 `body`；
 - `bug_report` 中 `what-happened`、`steps`、`expected`、`environment` 为必填；
 - `feature_request` 中 `problem`、`solution` 为必填；
-- `config.yml` 中 `blank_issues_enabled` 为 `false`，且至少有两个 `contact_links`，每个的 `url` 都以 `https://github.com/anyingiit/chefs-pick-oss-starter-workspace/` 开头。
+- `config.yml` 中 `blank_issues_enabled` 为 `false`，且至少有两个 `contact_links`，每个的 `url` 都以 `https://github.com/CHANGEME_OWNER/CHANGEME_REPO/` 开头。
 
 ## M08 `.github/PULL_REQUEST_TEMPLATE.md`（逐字）
 
@@ -276,7 +276,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial project structure.
 
-[Unreleased]: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/commits/main
+[Unreleased]: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/commits/main
 ```
 
 ```yaml
@@ -426,7 +426,7 @@ repos:
 # Source: GitHub code owners (official) — https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
 # Optional. Uncomment the line below to automatically request a review from the
 # repository owner on every pull request.
-# * @anyingiit
+# * @CHANGEME_OWNER
 ```
 
 C10 检查：文件中不能有非空且不以 `#` 开头的行。

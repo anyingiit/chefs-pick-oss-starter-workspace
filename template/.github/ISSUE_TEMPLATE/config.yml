@@ -2,8 +2,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Questions and help
-    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/discussions
+    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/discussions
     about: Please ask and answer questions in GitHub Discussions.
   - name: Report a security vulnerability
-    url: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new
+    url: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new
     about: Please report security vulnerabilities privately, not in public issues.

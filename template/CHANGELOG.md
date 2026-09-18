@@ -12,4 +12,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial project structure.
 
-[Unreleased]: https://github.com/anyingiit/chefs-pick-oss-starter-workspace/commits/main
+[Unreleased]: https://github.com/CHANGEME_OWNER/CHANGEME_REPO/commits/main

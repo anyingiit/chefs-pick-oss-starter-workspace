@@ -30,7 +30,7 @@ import check_template as ct  # noqa: E402
 # --------------------------------------------------------------------------
 
 CLEAN_README = (
-    "# Chefs Pick Oss Starter Workspace\n"
+    "# CHANGEME_PROJECT_NAME\n"
     "\n"
     "A short description of the project.\n"
 )
@@ -50,7 +50,7 @@ CLEAN_CHANGELOG = (
 CLEAN_CODEOWNERS = (
     "# Source: GitHub code owners (official)\n"
     "# Optional. Uncomment the line below to automatically request a review.\n"
-    "# * @anyingiit\n"
+    "# * @CHANGEME_OWNER\n"
 )
 
 CLEAN_FUNDING = (
@@ -296,7 +296,7 @@ class TestC10TemplateIdentityIsolation(CheckTestCase):
     def test_fail_identity_in_project_file(self):
         files = clean_project_tree()
         files["README.md"] = (
-            "# Chefs Pick Oss Starter Workspace\n"
+            "# CHANGEME_PROJECT_NAME\n"
             "\n"
             "Generated from the Chef's Pick OSS Starter template.\n"
         )
@@ -330,7 +330,7 @@ class TestC10TemplateIdentityIsolation(CheckTestCase):
         files = clean_project_tree()
         files[".github/CODEOWNERS"] = (
             "# Source: GitHub code owners (official)\n"
-            "* @anyingiit\n"
+            "* @CHANGEME_OWNER\n"
         )
         self.assertFail("C10", files)
 
@@ -559,7 +559,7 @@ class TestC11LanguageStructure(CheckTestCase):
         files = full_guidance_tree()
         files[".github/chefs-pick/LICENSE"] = GUIDANCE_LICENSE.replace(
             "Copyright (c) 2026 Chef's Pick OSS Starter contributors",
-            "Copyright (c) 2026 anyingiit",
+            "Copyright (c) 2026 CHANGEME_COPYRIGHT_HOLDER",
         )
         self.assertFail("C11", files)
 

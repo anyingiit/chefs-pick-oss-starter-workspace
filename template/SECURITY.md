@@ -14,7 +14,7 @@ Security updates are provided for the latest release only.
 
 **Please do not report security vulnerabilities through public issues, discussions, or pull requests.**
 
-Report it privately instead. Open the **Security** tab of this repository and choose **Report a vulnerability**, or go directly to https://github.com/anyingiit/chefs-pick-oss-starter-workspace/security/advisories/new. If private vulnerability reporting is unavailable, email leoycwan@gmail.com.
+Report it privately instead. Open the **Security** tab of this repository and choose **Report a vulnerability**, or go directly to https://github.com/CHANGEME_OWNER/CHANGEME_REPO/security/advisories/new. If private vulnerability reporting is unavailable, email CHANGEME_SECURITY_EMAIL.
 
 Please include:
 

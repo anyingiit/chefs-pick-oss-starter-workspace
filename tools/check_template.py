@@ -662,7 +662,7 @@ def check_c04(ctx: Context) -> list[str]:
             links = config.get("contact_links") or []
             if len(links) < 2:
                 problems.append(f"{rel}: expected at least two contact_links")
-            prefix = "https://github.com/anyingiit/chefs-pick-oss-starter-workspace/"
+            prefix = "https://github.com/CHANGEME_OWNER/CHANGEME_REPO/"
             for link in links:
                 url = (link or {}).get("url", "") if isinstance(link, dict) else ""
                 if not url.startswith(prefix):
@@ -705,7 +705,7 @@ def check_c16(ctx: Context) -> list[str]:
         raise SkipCheck(f"missing {rel}")
     text = read_text(path)
     problems = []
-    for needed in ("version 2.1", "leoycwan@gmail.com", "## Attribution"):
+    for needed in ("version 2.1", "CHANGEME_CONDUCT_EMAIL", "## Attribution"):
         if needed not in text:
             problems.append(f"{rel}: missing required text: {needed}")
     if "[INSERT CONTACT METHOD]" in text:
@@ -753,7 +753,7 @@ def check_c20(ctx: Context) -> list[str]:
             "**Please do not report security vulnerabilities through public issues, "
             "discussions, or pull requests.**",
             "security/advisories/new",
-            "leoycwan@gmail.com",
+            "CHANGEME_SECURITY_EMAIL",
         ):
             if needed not in text:
                 problems.append(f"SECURITY.md: missing required text: {needed}")
@@ -1736,7 +1736,7 @@ def check_c15(ctx: Context) -> list[str]:
     if first != "MIT License":
         problems.append(f"LICENSE: line 1 must be 'MIT License', found {first!r}")
 
-    expected = "Copyright (c) 2026 anyingiit"
+    expected = "Copyright (c) CHANGEME_YEAR CHANGEME_COPYRIGHT_HOLDER"
     third = lines[2] if len(lines) > 2 else ""
     if third != expected:
         problems.append(f"LICENSE: line 3 must be {expected!r}, found {third!r}")
