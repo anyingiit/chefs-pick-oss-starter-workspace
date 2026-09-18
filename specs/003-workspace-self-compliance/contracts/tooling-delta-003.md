@@ -27,7 +27,11 @@ repo_root = Path(__file__).resolve().parent.parent
 
 解析路径，**刻意忽略 `ctx.template_dir`**，并在各自的文档字符串中写明这一点，与 `check_c23` 的写法一致。理由见 research R3：工作区首页不在 `template/` 之下。
 
-`template/` 不存在、`README.md` 不存在、**或 `README.zh-CN.md` 不存在**时，C25、C26、C27 三者一律抛 `SkipCheck`，不得 FAIL——与 C23 对缺失契约的处理同口径。译本缺失也要跳过，是因为改造过程中必然出现「英文原文已重写、译本尚未建立」的中间状态（tasks.md 的 T008 与 T009 之间），此时硬失败会把一个预期中的过渡态报成错误。
+**跳过条件**：`template/` 不存在、`README.md` 不存在、或 `README.md` 中找不到 `WORKSPACE_SELECTOR_LINES["README.md"]` 那一行时，C25、C26、C27 三者一律抛 `SkipCheck`——与 C23 对缺失契约的处理同口径。判据是**语言入口是否已就位**，即本功能的改造是否已经开始，而不是译本文件是否存在。
+
+这一点必须照此实现，不得改成「译本缺失就跳过」：`README.md` 的语言入口指向 `README.zh-CN.md`，若以译本缺失为跳过条件，则译本一旦被误删，三项检查会全部静默失效，而首页上那条指向不存在文件的死链无人发现。语言入口已就位而译本缺失，本就应当判 FAIL。
+
+代价是改造过程中 `README.md` 已重写、译本尚未建立的那一小段（tasks.md 的 T008 与 T009 之间）整套校验会失败。这是真实的失败状态，不是误报，已写进 tasks.md 的执行约定。
 
 ## 3. C25 Workspace language structure
 
