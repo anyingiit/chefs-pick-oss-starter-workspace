@@ -185,9 +185,9 @@
 
 | 模块 | 选定来源（链接） | 版本或提交 | 上游许可证 | 认可度证据 | 规则 | 备选方案（证据；原因） |
 |---|---|---|---|---|---|---|
-| M01 | Best-README-Template（https://github.com/othneildrew/Best-README-Template） | othneildrew/Best-README-Template@fc444eb | Unlicense | 精确 Star 数 / Exact stars：★ 16,500 (othneildrew/Best-README-Template) | 1 | standard-readme：精确 Star 数 ★ 6,367 (RichardLitt/standard-readme)，需要额外的检查工具和章节约束；The-Documentation-Compendium：精确 Star 数 ★ 6,036 (race2infinity/The-Documentation-Compendium)，没有许可证；awesome-readme-template：精确 Star 数 ★ 1,861 (Louis3797/awesome-readme-template)，2022 年后没有更新 |
+| M01 | Best-README-Template（https://github.com/othneildrew/Best-README-Template） | othneildrew/Best-README-Template@fc444eb | Unlicense | 精确 Star 数 / Exact stars：★ 16,360 (othneildrew/Best-README-Template) | 1 | standard-readme：精确 Star 数 ★ 6,367 (RichardLitt/standard-readme)，需要额外的检查工具和章节约束；The-Documentation-Compendium：精确 Star 数 ★ 6,036 (race2infinity/The-Documentation-Compendium)，没有许可证；awesome-readme-template：精确 Star 数 ★ 1,861 (Louis3797/awesome-readme-template)，2022 年后没有更新 |
 | M02 | choosealicense.com 的 MIT（https://choosealicense.com/licenses/mit/），SPDX `MIT` | github/choosealicense.com@58267f8 | MIT | 平台官方功能 / Official platform feature：GitHub 运营的许可证选择器；精确 Star 数 / Exact stars：★ 4,202 (github/choosealicense.com) | 1 | 其他 OSI 许可证：未取得 / Not available；交接文档已把 MIT 定为默认，使用者可以自行更换 |
-| M03 | github/gitignore 的 Global 模板（https://github.com/github/gitignore） | github/gitignore@356fd7b | CC0-1.0 | 精确 Star 数 / Exact stars：★ 176,000 (github/gitignore) | 1 | gitignore.io 在线服务：未取得 / Not available；依赖第三方服务 |
+| M03 | github/gitignore 的 Global 模板（https://github.com/github/gitignore） | github/gitignore@356fd7b | CC0-1.0 | 精确 Star 数 / Exact stars：★ 175,816 (github/gitignore) | 1 | gitignore.io 在线服务：未取得 / Not available；依赖第三方服务 |
 | M04 | Contributor Covenant 2.1（https://www.contributor-covenant.org/version/2/1/code_of_conduct/） | 2.1（EthicalSource/contributor_covenant@7255a28） | CC-BY-4.0 | 事实标准 / De facto standard：官方采用者名单收录 454 个项目，包括 .NET Foundation、Bootstrap、Cloud Native Computing Foundation、curl、Django；精确 Star 数 / Exact stars：★ 2,259 (EthicalSource/contributor_covenant) | 1 + 2 | Contributor Covenant 3.0：事实标准 / De facto standard，采用 CC BY-SA 4.0，并要求改写执行说明；Contributor Covenant 2.0：平台官方功能 / Official platform feature，已被 2.1 取代；Django Code of Conduct：平台官方功能 / Official platform feature，采用面较窄 |
 | M05 | GitHub Open Source Guides（https://opensource.guide/starting-a-project/）+ GitHub Docs（markers §2.2 中 CONTRIBUTING 行的链接） | 只参考结构，正文为原创 | CC-BY-4.0（未复制文字） | 精确 Star 数 / Exact stars：★ 15,685 (github/opensource.guide)；平台官方功能 / Official platform feature：GitHub Docs | 1 | jessesquires/.github：精确 Star 数 ★ 42 (jessesquires/.github)，默认分支最近提交为 2023-03-26，已超过 12 个月 |
 | M06 | GitHub 安全策略与私有漏洞报告（链接见 markers §2.2、§3） | — | 官方文档 / Official docs | 平台官方功能 / Official platform feature | 1 + 2 | 只提供邮箱或 PGP：未取得 / Not available；需要交换密钥，起步更难 |
@@ -210,9 +210,9 @@
 `.github/README.md` 第 3 节两个 summary 标记之间，除表头和分隔行外，必须依次是以下 16 行。"核实日期"一列写当次数据核实日期，初次写入为 `2026-09-18`，之后由 `tools/verify_sources.py` 统一刷新。
 
 ```markdown
-| M01 项目说明 / README | Best-README-Template | ★ 16,500 (othneildrew/Best-README-Template) | 2026-09-18 |
+| M01 项目说明 / README | Best-README-Template | ★ 16,360 (othneildrew/Best-README-Template) | 2026-09-18 |
 | M02 许可证 / License | choosealicense.com（MIT） | 平台官方功能 / Official platform feature | 2026-09-18 |
-| M03 忽略规则 / Ignore rules | github/gitignore（Global） | ★ 176,000 (github/gitignore) | 2026-09-18 |
+| M03 忽略规则 / Ignore rules | github/gitignore（Global） | ★ 175,816 (github/gitignore) | 2026-09-18 |
 | M04 行为准则 / Code of Conduct | Contributor Covenant 2.1 | 事实标准 / De facto standard（454 adopters） | 2026-09-18 |
 | M05 贡献指南 / Contributing guide | GitHub Open Source Guides | ★ 15,685 (github/opensource.guide) | 2026-09-18 |
 | M06 安全策略 / Security policy | GitHub 安全策略 + 私有漏洞报告 | 平台官方功能 / Official platform feature | 2026-09-18 |
