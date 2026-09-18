@@ -37,8 +37,13 @@ TABLE_HEADER = "| Repo | Stars | Forks | Last commit | License | Archived | Veri
 TABLE_SEP = "|---|---:|---:|---|---|---|---|"
 
 STAR_RE = re.compile(r"★ ([\d,]+) \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\)")
-DATA_VERIFIED_RE = re.compile(r"(数据核实日期 / Data verified:\s*)(\d{4}-\d{2}-\d{2})")
-VERIFIED_CELL_RE = re.compile(r"(\|\s*核实日期 / Verified\s*\|\s*)(\d{4}-\d{2}-\d{2})(\s*\|)")
+# These two must track the labels actually written in SOURCES.md. The labels
+# became English-only when the guidance layer was converted; a pattern still
+# demanding the old bilingual text silently matches nothing, so --write would
+# refresh the adoption figures while leaving every date stale, and the release
+# gate would then reject data that had just been refreshed.
+DATA_VERIFIED_RE = re.compile(r"(Data verified:\s*)(\d{4}-\d{2}-\d{2})")
+VERIFIED_CELL_RE = re.compile(r"(\|\s*Verified\s*\|\s*)(\d{4}-\d{2}-\d{2})(\s*\|)")
 
 STALE_DAYS = 365
 

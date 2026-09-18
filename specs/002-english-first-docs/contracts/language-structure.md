@@ -49,7 +49,9 @@
 
 分隔符是 U+00B7 中点，左右各一个半角空格。
 
-**其余六份文档（GUIDE、SOURCES、MAINTAINING、UPGRADE-TO-TEAM、CHANGELOG、LICENSE）不得出现语言入口，也不得出现任何关于本文语言的说明。**
+**其余六份文档（GUIDE、SOURCES、MAINTAINING、UPGRADE-TO-TEAM、CHANGELOG、LICENSE）不得出现语言入口，也不得出现任何关于**该文档自身**语言的说明。**
+
+这一条约束的是文档谈论它自己：不写「本文为英文版」「中文版见……」之类的话。它不约束文档把「多语言文档怎么做」当作**内容**来讲——`GUIDE.md` 按 [guidance-layer-en.md](./guidance-layer-en.md) §6 必须有的 `## Translating your own README` 一节，讲的是**使用者自己仓库**的 README 怎么分英文版和中文译本，与 `GUIDE.md` 自己用什么语言写无关，因此不在禁止之列。该节中作为范例出现的语言入口写法位于围栏代码块内，按 §5 的纯度算法在判定前先被剥离，既不构成 `GUIDE.md` 的语言入口，也不计入它的语言纯度。
 
 ## 2. 规范性声明（FR-001）
 
