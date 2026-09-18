@@ -62,7 +62,7 @@ It states the rules of participation and the reporting channel up front, so that
 
 ### Customize
 
-Fill in the placeholder for the reporting email address; it is the only thing in the file you must change. Projects working in Chinese can link the official Chinese translation, see [Chinese translations](#chinese-translations).
+Fill in the placeholder for the reporting email address; it is the only thing in the file you must change. Projects working in Chinese can link the official Chinese translation, see [Translating your own README](#translating-your-own-readme).
 
 ### Remove
 
@@ -302,22 +302,37 @@ Two exceptions are worth remembering. Issue templates are all-or-nothing: as soo
 
 See the official docs: [Creating a default community health file](https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/creating-a-default-community-health-file).
 
-## 中文译本 / Chinese translations
+## Translating your own README
 
-模板里的协作文件默认用英文，因为开源协作的默认语言是英文，英文版本也最容易被外部贡献者读懂。如果你的项目主要面向中文使用者，可以把这些文件换成官方中文译本，或者在英文正文旁附一条译本链接。
+The common convention in open source is to keep `README.md` in English as the canonical version, and add a separate `README.zh-CN.md` for Simplified Chinese, with a one-line language switcher at the top of each file pointing at the other. You can copy these two lines directly into your own files:
 
-The collaboration files in the template are in English, because English is the default language of open-source collaboration and the version outside contributors are most likely to read. If your project is aimed mainly at Chinese-speaking users, you can replace these files with the official Chinese translations, or link a translation alongside the English text.
+In `README.md`:
 
-| 文件 / File | 官方中文译本 / Official Chinese translation |
+```markdown
+**English** · [简体中文](README.zh-CN.md)
+```
+
+In `README.zh-CN.md`:
+
+```markdown
+[English](README.md) · **简体中文**
+```
+
+
+This is not a preference invented for this template: it is the pattern used across a wide range of well-known projects, including dify, RAGFlow, LobeChat, SiYuan, Ant Design and RustDesk. In every one of them, the root `README.md` is the English canonical version, and the Chinese translation lives in its own separate file rather than being interleaved with the English text.
+
+The collaboration files that ship with this template are in English for the same reason: English is the default language of open-source collaboration, and it is the version outside contributors are most likely to read. If your project is aimed mainly at Chinese-speaking users, you can replace these files with their official Chinese translations, or link a translation alongside the English text.
+
+| File | Official Chinese translation |
 |---|---|
 | `CODE_OF_CONDUCT.md` | https://www.contributor-covenant.org/zh-cn/version/2/1/code_of_conduct/ |
 | `CHANGELOG.md` | https://keepachangelog.com/zh-CN/1.1.0/ |
-| 版本号规则 / Versioning | https://semver.org/lang/zh-CN/ |
+| Versioning | https://semver.org/lang/zh-CN/ |
 | `CONTRIBUTING.md` | https://opensource.guide/zh-hans/starting-a-project/ |
 
-Contributor Covenant 还有其他语种的译本，列表见 https://www.contributor-covenant.org/translations/ 。替换译本时注意保留文件第一行的来源注释。
-
 Contributor Covenant is available in other languages too; the list is at https://www.contributor-covenant.org/translations/ . When you swap in a translation, keep the source comment on the first line of the file.
+
+This template follows its own advice here: its own `.github/README.md` is the English canonical version, and `.github/README.zh-CN.md` is the Chinese translation.
 
 ## Tracing the template version
 

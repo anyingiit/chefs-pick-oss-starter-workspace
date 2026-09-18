@@ -41,6 +41,16 @@ Treat a Dependabot pull request on the template repository as a notification tha
 
 A selection change updates both files in the same commit: the module's source, evidence, verification date, rationale and alternatives in `SOURCES.md`, and an entry under `Unreleased` in [CHANGELOG.md](CHANGELOG.md). Entries go under Added, Changed or Removed and always state the reason for the change. Updating only one of the two leaves the selection list and the changelog out of step.
 
+## Keeping the translations in step
+
+The translated files cover exactly two documents: `.github/README.md` has `.github/README.zh-CN.md`, and `.github/chefs-pick/SETUP.md` has `.github/chefs-pick/SETUP.zh-CN.md`. Every other guide-layer document is English-only and has no translated counterpart.
+
+Each translated file carries a line of the form `<!-- translation-of: <source> sha256:<16 hex> -->`, recording a digest of the English source it was translated from. After an English source changes, running `python3 tools/check_template.py` flags the now-outdated translation with `WARN C24`; this warning does not affect the exit code, so ordinary development is not blocked by it.
+
+After updating a translation to match its source, run `python3 tools/check_template.py --update-digests` to refresh that source marker to the current value. Do not compute the digest by hand and do not edit that line yourself.
+
+Before a release, `python3 tools/check_template.py --release` treats an outdated translation as a **FAIL**, which makes the command exit 1. This is what release gate 6, "Every translation is aligned with its current English source," checks.
+
 ## Release gates
 
 All six gates must pass **before** the Release is created:
