@@ -51,7 +51,9 @@ REQUIRED_FILES = [
     ".github/CODEOWNERS",
     ".github/FUNDING.yml",
     ".github/README.md",
+    ".github/README.zh-CN.md",
     ".github/chefs-pick/SETUP.md",
+    ".github/chefs-pick/SETUP.zh-CN.md",
     ".github/chefs-pick/GUIDE.md",
     ".github/chefs-pick/SOURCES.md",
     ".github/chefs-pick/MAINTAINING.md",
@@ -1199,14 +1201,20 @@ def check_c11(ctx: Context) -> list[str]:
                         f"does not exist: {target}"
                     )
         else:
+            # Fenced code blocks are excluded here for the same reason as in
+            # the purity check (research.md R6): a tutorial snippet showing
+            # the selector-line convention (for example GUIDE.md's
+            # "Translating your own README" section) is not itself a
+            # language entry into this document.
+            prose = _strip_fenced_code(text)
             for value in SELECTOR_LINES.values():
-                if value in text:
+                if value in prose:
                     problems.append(
                         f"{rel}: language selector: must not contain a "
                         f"language-selector line: {value!r}"
                     )
             for bad in ("](README.zh-CN.md)", "](SETUP.zh-CN.md)"):
-                if bad in text:
+                if bad in prose:
                     problems.append(
                         f"{rel}: language selector: must not link to a "
                         f"translation: {bad}"
@@ -1570,6 +1578,7 @@ HREF_RE = re.compile(r'href="([^"]+)"')
 
 
 def _iter_links(text: str):
+    text = _strip_fenced_code(text)
     for match in LINK_RE.finditer(text):
         yield match.group(1)
     for match in HREF_RE.finditer(text):
@@ -1626,6 +1635,12 @@ def check_c13(ctx: Context) -> list[str]:
         guidance_file = copy / GUIDANCE_FILE
         if guidance_file.exists():
             guidance_file.unlink()
+        # language-structure.md §6, tooling-delta.md §4: the cleanup command
+        # also removes the home page's translation, which lives beside it
+        # outside GUIDANCE_DIR.
+        home_translation = copy / ".github/README.zh-CN.md"
+        if home_translation.exists():
+            home_translation.unlink()
         guidance_dir = copy / GUIDANCE_DIR
         if guidance_dir.exists():
             shutil.rmtree(guidance_dir)
@@ -1634,7 +1649,7 @@ def check_c13(ctx: Context) -> list[str]:
         found: set[str] = set()
         for rel in remaining:
             text = read_text(copy / rel)
-            for needle in ("chefs-pick/", ".github/README.md"):
+            for needle in ("chefs-pick/", ".github/README.md", ".github/README.zh-CN.md"):
                 if needle in text:
                     problems.append(f"after cleanup, {rel} still references {needle}")
             match = IDENTITY_RE.search(text)
@@ -1770,10 +1785,31 @@ def _english_headings(ctx, rel, wanted, what):
 
 
 def check_c18(ctx: Context) -> list[str]:
-    """MAINTAINING.md carries the six headings from guidance-layer §5."""
-    return _english_headings(
-        ctx, f"{GUIDANCE_DIR}/MAINTAINING.md", MAINTAINING_HEADINGS, "guidance-layer §5"
-    )
+    """MAINTAINING.md carries the six headings from guidance-layer §5.
+
+    Plus two assertions added by tooling-delta.md §4 C18: the ``## Release
+    gates`` section must spell out exactly 6 ordered-list items, and the
+    page must mention ``--update-digests`` (research.md R9).
+    """
+    rel = f"{GUIDANCE_DIR}/MAINTAINING.md"
+    problems = _english_headings(ctx, rel, MAINTAINING_HEADINGS, "guidance-layer §5")
+
+    path = ctx.template_dir / rel
+    if path.is_file():
+        text = read_text(path)
+        if "--update-digests" not in text:
+            problems.append(f"{rel}: must mention --update-digests")
+
+        gates_heading = "## Release gates"
+        if gates_heading in text:
+            body = text.split(gates_heading, 1)[1].split("\n## ", 1)[0]
+            gate_items = re.findall(r"^\d+\.\s", body, re.MULTILINE)
+            if len(gate_items) != 6:
+                problems.append(
+                    f"{rel}: the '{gates_heading}' section must have exactly 6 "
+                    f"ordered-list items, found {len(gate_items)}"
+                )
+    return problems
 
 
 def check_c19(ctx: Context) -> list[str]:
@@ -1888,6 +1924,107 @@ def check_c22(ctx: Context) -> list[str]:
     return problems
 
 
+def check_c23(ctx: Context) -> list[str]:
+    """The verbatim 001 contract's star counts agree with ``template/``.
+
+    tooling-delta.md §5 C23: paths are resolved relative to the repository
+    root (the script's own parent directory's parent), never to
+    ``--template-dir``, so this check always looks at the real contract and
+    the real template regardless of ``ctx.template_dir``.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    contract_path = (
+        repo_root / "specs/001-chefs-pick-starter/contracts/guidance-layer.md"
+    )
+    if not contract_path.is_file():
+        raise SkipCheck(f"missing {contract_path}")
+
+    contract_stars: dict[str, str] = {}
+    for stars, repo in STAR_RE.findall(read_text(contract_path)):
+        contract_stars[repo] = stars.replace(",", "")
+
+    template_stars: dict[str, str] = {}
+    template_root = repo_root / "template"
+    if template_root.is_dir():
+        for rel in iter_files(template_root):
+            if not rel.endswith(".md"):
+                continue
+            for stars, repo in STAR_RE.findall(read_text(template_root / rel)):
+                template_stars[repo] = stars.replace(",", "")
+
+    problems = []
+    for repo in sorted(set(contract_stars) & set(template_stars)):
+        contract_value = contract_stars[repo]
+        template_value = template_stars[repo]
+        if contract_value != template_value:
+            problems.append(
+                f"{repo}: contract {contract_value} vs template {template_value}"
+            )
+    return problems
+
+
+def check_c24(ctx: Context) -> list[str]:
+    """Every translation's source marker matches its current English source.
+
+    tooling-delta.md §5 C24: a stale-but-well-formed digest is a WARN
+    (a FAIL under ``--release``); a missing marker, a malformed marker, or
+    a marker naming a source file that does not exist is always a FAIL,
+    since those are structural problems, not freshness problems.
+    """
+    root = ctx.template_dir
+    translations = find_translations(root)
+    if not translations:
+        raise SkipCheck("no translation is present")
+
+    problems: list[str] = []
+    stale: list[str] = []
+    for translation_rel, source_rel in sorted(translations.items()):
+        if not selected(ctx, translation_rel):
+            continue
+        source_name = Path(source_rel).name
+        text = read_text(root / translation_rel)
+
+        digest_match = None
+        for line in text.splitlines():
+            match = DIGEST_RE.match(line)
+            if match and match.group(1) == source_name:
+                digest_match = match
+                break
+
+        if digest_match is None:
+            problems.append(
+                f"{translation_rel}: missing or malformed source marker for "
+                f"{source_name} (expected exactly one line "
+                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
+            )
+            continue
+
+        source_path = root / source_rel
+        if not source_path.is_file():
+            problems.append(
+                f"{translation_rel}: source marker names a file that does not "
+                f"exist: {source_rel}"
+            )
+            continue
+
+        recorded_digest = digest_match.group(2)
+        actual_digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
+        if recorded_digest != actual_digest:
+            stale.append(
+                f"{translation_rel}: source marker is stale for {source_rel} "
+                f"(recorded {recorded_digest}, current {actual_digest}); run "
+                "python3 tools/check_template.py --update-digests"
+            )
+
+    if problems:
+        return problems + stale
+    if stale:
+        if ctx.release:
+            return stale
+        raise WarnCheck(stale)
+    return []
+
+
 def update_digests(template_dir: Path) -> None:
     """Refresh every translation's source-marker digest in place.
 
@@ -1951,6 +2088,8 @@ CHECKS = {
     "C20": ("Contributor documents", lambda ctx: check_c20(ctx)),
     "C21": ("Text format", lambda ctx: check_c21(ctx)),
     "C22": ("Removal simulation", lambda ctx: check_c22(ctx)),
+    "C23": ("Contract parity", lambda ctx: check_c23(ctx)),
+    "C24": ("Translation freshness", lambda ctx: check_c24(ctx)),
 }
 
 

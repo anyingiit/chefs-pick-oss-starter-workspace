@@ -37,8 +37,10 @@ macOS 生成的 `.DS_Store` 由所有检查统一忽略，不作为问题报告�
 | `.pre-commit-config.yaml` | M14 | 可选 | 是 | 项目文件 |
 | `.github/CODEOWNERS` | M15 | 可选 | 是 | 项目文件 |
 | `.github/FUNDING.yml` | M16 | 可选 | 是 | 项目文件 |
-| `.github/README.md` | — | — | 是 | 起步引导层 |
-| `.github/chefs-pick/SETUP.md` | — | — | 是 | 起步引导层 |
+| `.github/README.md` | — | — | 是 | 起步引导层（英文规范版本） |
+| `.github/README.zh-CN.md` | — | — | 是 | 起步引导层（中文译本，功能 002 新增） |
+| `.github/chefs-pick/SETUP.md` | — | — | 是 | 起步引导层（英文规范版本） |
+| `.github/chefs-pick/SETUP.zh-CN.md` | — | — | 是 | 起步引导层（中文译本，功能 002 新增） |
 | `.github/chefs-pick/GUIDE.md` | — | — | 是 | 起步引导层 |
 | `.github/chefs-pick/SOURCES.md` | — | — | 是 | 起步引导层 |
 | `.github/chefs-pick/MAINTAINING.md` | — | — | 是 | 起步引导层 |
@@ -50,11 +52,11 @@ macOS 生成的 `.DS_Store` 由所有检查统一忽略，不作为问题报告�
 
 ## 3. 起步引导层
 
-- **定义**：起步引导层恰好由 `template/.github/README.md` 和 `template/.github/chefs-pick/` 目录下的全部文件组成。其余文件统称"项目文件"。
+- **定义**：起步引导层恰好由 `template/.github/README.md`、它在同目录下的各语言译本（形如 `README.<lang>.md`）和 `template/.github/chefs-pick/` 目录下的全部文件组成。其余文件统称"项目文件"。译本必须计入引导层，否则会被当作项目文件，导致"项目文件不得含中文""项目文件不得链接进引导层"等检查误报。
 - **首页展示**：GitHub 优先展示 `.github/README.md`（research F1），所以模板仓库首页和刚生成的仓库首页显示的都是它；根目录的 `README.md` 是项目骨架。
-- **清理命令**：唯一的清理命令是 `git rm -r .github/README.md .github/chefs-pick`，之后提交即可。在网页上操作时，删除这个文件和这个目录即可。
+- **清理命令**：唯一的清理命令是 `git rm -r .github/README.md .github/README.zh-CN.md .github/chefs-pick`，之后提交即可。首页的译本在 `chefs-pick/` 之外，必须显式列出；仍然只有一条命令。在网页上操作时，删除这个文件和这个目录即可。
 - **清理后必须满足以下条件**（C13 检查）：
-  1. `.github/README.md` 和 `.github/chefs-pick/` 都不存在，根目录的 `README.md` 成为首页。
+  1. `.github/README.md`、`.github/README.zh-CN.md` 和 `.github/chefs-pick/` 都不存在，根目录的 `README.md` 成为首页。
   2. 其余文件中不出现 `chefs-pick/` 或 `.github/README.md` 字样，也没有指向它们的链接。
   3. 其余文件中没有模板身份字样：正则 `(?i)chef'?s[ -]?pick` 或 `主厨精选` 都没有匹配。
   4. 占位符仍然只有登记表中的 `CHANGEME_*`（见 [markers.md](./markers.md)）。

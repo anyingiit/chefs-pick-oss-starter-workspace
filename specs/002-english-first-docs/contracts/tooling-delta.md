@@ -158,3 +158,31 @@ def longest_english_run(text: str) -> int  # 最长的连续英文词个数，�
 | `tools/tests/test_real_template.py` | 对真实 `template/` 断言：8 个英文文件 `cjk_count == 0`（`README.zh-CN.md`、`SETUP.zh-CN.md` 除外）、两份译本 `longest_english_run < 6`、四个文件锚点序列正确、C23 与 C24 通过 |
 
 所有新增测试必须使用 `tools/tests/helpers.py` 既有的临时模板夹具方式，不得依赖真实 `template/`（`test_real_template.py` 除外）。
+
+## 8. 集成阶段发现并修正的四处遗漏
+
+本节记录实现过程中暴露、契约原文未覆盖、已当场修正的问题。写在这里是为了让契约与代码保持一致，下次读契约的人不必重新踩一遍。
+
+### 8.1 `is_guidance()` 必须认出首页的译本
+
+`.github/README.zh-CN.md` 挂在 `.github/` 下而不在 `chefs-pick/` 里，原判定只认 `GUIDANCE_FILE` 与 `GUIDANCE_DIR/` 前缀，会把它当成**项目文件**，于是 C10 用"项目文件不得含中文"判它 FAIL，C13/C14/C22 又报"项目文件不得链接进引导层"。
+
+**修正**：`is_guidance()` 额外用 `TRANSLATION_FILENAME_RE` 识别"与 `GUIDANCE_FILE` 同目录、且是其译本"的文件，语言标签不写死。
+
+### 8.2 C11 的语言入口断言必须先剥离围栏代码块
+
+契约只对"纯度"断言写明了要先跑 `strip_for_purity`。但 `GUIDE.md` 的 `## Translating your own README` 一节在围栏代码块里**逐字展示**语言入口写法，供使用者抄进自己的项目。不剥离围栏代码块，该节会让"非译本文档不得含语言入口"这条断言永远 FAIL。
+
+**修正**：断言 2 与断言 1 一样，先 `_strip_fenced_code` 再判定。原则是**围栏代码块里的内容是示例，不是本文档的正文**。
+
+### 8.3 `_iter_links()` 必须剥离围栏代码块
+
+同一节的代码块里有 `[English](README.md)` 这样的真实 Markdown 链接语法。C14 与 C22 共用的 `_relative_link_problems` 不区分代码块，把它们当成相对 `chefs-pick/` 的真链接来解析，报 26 条 broken link。
+
+**修正**：`_iter_links()` 开头调用 `_strip_fenced_code`。与 8.2 同一条原则。
+
+### 8.4 C01 的文件清单必须登记两份译本
+
+`REQUIRED_FILES` 源自 [template-layout.md](../../001-chefs-pick-starter/contracts/template-layout.md) §2，从未包含新增的译本，C01 报 `unexpected file` ×2。
+
+**修正**：两份译本作为**必需**的引导层文件加入 `REQUIRED_FILES`；001 的 template-layout §2 文件表、§3 引导层定义、清理命令与清理后状态同步更新。`template/` 文件数 26 → 28。
