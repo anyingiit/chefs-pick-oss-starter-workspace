@@ -92,7 +92,7 @@ python3 tools/check_template.py [--template-dir PATH] [--release] [--today YYYY-
 | C21 | Text format | 见下方说明 |
 | C22 | Removal simulation | 见下方说明 |
 
-每项检查所属的阶段：C01 在收尾阶段做全量运行；C02、C03、C05、C06、C08、C09、C10、C11、C13、C14、C15、C17、C21、C22 属于基础阶段，供 US1 使用；C12 属于 US2；C04、C07、C16、C20 属于 US3；C18 属于 US4；C19 属于 US5。全部共 24 项。C23、C24 由功能 002 新增，见 specs/002-english-first-docs/contracts/tooling-delta.md。
+每项检查所属的阶段：C01 在收尾阶段做全量运行；C02、C03、C05、C06、C08、C09、C10、C11、C13、C14、C15、C17、C21、C22 属于基础阶段，供 US1 使用；C12 属于 US2；C04、C07、C16、C20 属于 US3；C18 属于 US4；C19 属于 US5。全部共 22 项。C23、C24 由功能 002 新增，见 specs/002-english-first-docs/contracts/tooling-delta.md；C25 ~ C27 由功能 003 新增，见 specs/003-workspace-self-compliance/contracts/tooling-delta-003.md。含后续功能新增的部分，检查项现共 27 项。
 
 **C08 Placeholders**：
 - 从 `SETUP.md` 的占位符表中解析登记表：表头见 [guidance-layer.md](./guidance-layer.md) §2；第 1 列取反引号中的占位符，第 3 列取所有反引号中的路径。
