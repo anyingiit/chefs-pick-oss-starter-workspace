@@ -261,18 +261,54 @@ class TestC25WorkspaceLanguageStructure(unittest.TestCase):
         self.assertIn(SOURCE_REL, joined)
         self.assertIn("normative notice", joined)
 
-    def test_missing_selector_in_source_skips(self) -> None:
-        # No language-selector line anywhere in README.md at all: this is
-        # the tooling-delta-003.md §2 skip predicate (whether the
-        # conversion has begun), not a FAIL -- independent of whether a
-        # translation exists.
+    def test_missing_selector_in_source_fails(self) -> None:
+        # FIXED (Finding 2): no language-selector line anywhere in
+        # README.md used to be the tooling-delta-003.md §2 SkipCheck
+        # predicate -- deleting or misspelling that one line silently
+        # turned C25 (and C26, C27) off. It is now a FAIL, naming
+        # README.md and what is missing; ``template/`` still exists here,
+        # so this is not the "not the workspace repository" case that
+        # remains a SkipCheck (see test_missing_template_dir_still_skips).
         no_selector_source = valid_source_text().replace(f"{SOURCE_SELECTOR}\n", "")
         self.assertNotIn(SOURCE_SELECTOR, no_selector_source)
         with FakeRepoRoot() as fake:
             fake.write(base_files(no_selector_source, None))
+            status, problems = run_one("C25", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(SOURCE_REL, joined)
+        self.assertIn("language selector", joined)
+
+    def test_missing_readme_fails(self) -> None:
+        # FIXED (Finding 2): README.md itself missing is a FAIL, not a
+        # SkipCheck, once ``template/`` exists.
+        with FakeRepoRoot() as fake:
+            fake.write({"template/.keep": ""})
+            status, problems = run_one("C25", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(SOURCE_REL, joined)
+        self.assertIn("does not exist", joined)
+
+    def test_missing_template_dir_still_skips(self) -> None:
+        # The one remaining SkipCheck predicate (Finding 2): ``template/``
+        # does not exist at all, i.e. this is not the workspace repository.
+        with FakeRepoRoot() as fake:
+            fake.write({SOURCE_REL: valid_source_text()})
+            self.assertFalse((fake.root / "template").exists())
             status, reason = run_one("C25", make_ctx(fake.root))
         self.assertEqual(status, "SKIP", reason)
-        self.assertIn(SOURCE_REL, " ".join(reason))
+
+    def test_missing_translation_fails(self) -> None:
+        # A missing translation is not a skip condition either: the
+        # selector then points at a file that does not exist.
+        with FakeRepoRoot() as fake:
+            fake.write(base_files(valid_source_text(), None))
+            status, problems = run_one("C25", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(TRANSLATION_REL, joined)
+        self.assertIn("does not exist", joined)
 
 
 if __name__ == "__main__": # pragma: no cover

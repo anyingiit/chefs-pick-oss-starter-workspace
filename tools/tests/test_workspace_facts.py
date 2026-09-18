@@ -33,6 +33,7 @@ No test here reads or writes the real ``README.md``, ``README.zh-CN.md``,
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -65,6 +66,14 @@ class FakeRepoRoot:
     ``<tmp>/tools/check_template.py`` (a path that need not exist on disk)
     so that ``check_c26``'s own ``repo_root = Path(__file__).resolve()
     .parent.parent`` resolves to ``<tmp>``.
+
+    check_c26 now derives the ``template/`` file count from git-tracked
+    files (Finding 4), via ``git -C <repo_root> ls-files``, so *root* must
+    be a real (if throwaway) git repository for that to succeed: ``write``
+    runs ``git init`` once and ``git add -A`` after writing files, staging
+    everything written so far as tracked. A file created directly on disk
+    afterwards (not through ``write``) stays untracked, which is exactly
+    what the untracked-file test below needs.
     """
 
     def __init__(self) -> None:
@@ -73,6 +82,7 @@ class FakeRepoRoot:
         self._patcher = mock.patch.object(
             ct, "__file__", str(self.root / "tools" / "check_template.py")
         )
+        self._git_initialized = False
 
     def __enter__(self) -> "FakeRepoRoot":
         self._patcher.start()
@@ -84,6 +94,15 @@ class FakeRepoRoot:
 
     def write(self, files: dict[str, str]) -> None:
         write_tree(self.root, files)
+        if not self._git_initialized:
+            subprocess.run(
+                ["git", "init", "-q"], cwd=self.root, check=True,
+                capture_output=True,
+            )
+            self._git_initialized = True
+        subprocess.run(
+            ["git", "add", "-A"], cwd=self.root, check=True, capture_output=True,
+        )
 
 
 def readme_en(
@@ -285,7 +304,13 @@ class TestC26WorkspaceFacts(unittest.TestCase):
         self.assertIn("1", joined)
         self.assertIn("2", joined)
 
-    def test_no_language_selector_line_skips(self) -> None:
+    def test_no_language_selector_line_fails(self) -> None:
+        # FIXED (Finding 2): the language-selector line missing from
+        # README.md used to be a SkipCheck predicate -- deleting or
+        # misspelling that one line silently turned C25, C26 and C27 all
+        # off. It is now a FAIL, naming README.md and what is missing.
+        # ``template/`` still exists here, so this is not the "not the
+        # workspace repository at all" case that remains a SkipCheck.
         with FakeRepoRoot() as fake:
             fake.write(
                 {
@@ -299,8 +324,102 @@ class TestC26WorkspaceFacts(unittest.TestCase):
                     ),
                 }
             )
+            status, problems = run_one("C26", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(README, joined)
+        self.assertIn("language selector", joined)
+
+    def test_missing_readme_fails(self) -> None:
+        # FIXED (Finding 2): README.md itself missing is a FAIL, not a
+        # SkipCheck, once ``template/`` exists (i.e. this is genuinely the
+        # workspace repository).
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    "template/a.md": "a\n",
+                    "specs/only-feature/.keep": "",
+                }
+            )
+            status, problems = run_one("C26", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(README, joined)
+        self.assertIn("does not exist", joined)
+
+    def test_missing_template_dir_still_skips(self) -> None:
+        # The one remaining SkipCheck predicate (Finding 2): ``template/``
+        # does not exist at all, i.e. this is not the workspace repository.
+        # No fixture path below is under "template/", so fake.write() never
+        # creates that directory.
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    "specs/only-feature/.keep": "",
+                    README: readme_en(
+                        file_count=0,
+                        checks_count=ACTUAL_CHECKS,
+                        spec_dirs=["only-feature"],
+                    ),
+                }
+            )
+            self.assertFalse((fake.root / "template").exists())
             status, reason = run_one("C26", make_ctx(fake.root))
         self.assertEqual(status, "SKIP", reason)
+
+    def test_missing_translation_fails_naming_it(self) -> None:
+        # FIXED (Finding 6): the selector is in place but README.zh-CN.md
+        # itself does not exist -- C26 must record a FAIL naming the
+        # missing file, not silently drop it from the set it validates.
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    "template/a.md": "a\n",
+                    "specs/only-feature/.keep": "",
+                    README: readme_en(
+                        file_count=1,
+                        checks_count=ACTUAL_CHECKS,
+                        spec_dirs=["only-feature"],
+                    ),
+                }
+            )
+            self.assertFalse((fake.root / README_ZH).exists())
+            status, problems = run_one("C26", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn(README_ZH, joined)
+        self.assertIn("does not exist", joined)
+
+    def test_untracked_file_under_template_does_not_change_count(self) -> None:
+        # FIXED (Finding 4): the declared count is compared against
+        # git-tracked files under template/, not a filesystem walk -- a
+        # stray untracked file (a scratch probe, a build artefact) must
+        # not make a correct declaration look wrong.
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    "template/a.md": "a\n",
+                    "template/b.md": "b\n",
+                    "specs/only-feature/.keep": "",
+                    README: readme_en(
+                        file_count=2,
+                        checks_count=ACTUAL_CHECKS,
+                        spec_dirs=["only-feature"],
+                    ),
+                    README_ZH: readme_zh(
+                        file_count=2,
+                        checks_count=ACTUAL_CHECKS,
+                        spec_dirs=["only-feature"],
+                    ),
+                }
+            )
+            # Written directly to disk, deliberately bypassing fake.write()
+            # (and therefore "git add"), so it stays untracked.
+            (fake.root / "template" / ".scratch-probe").write_text(
+                "not tracked\n", encoding="utf-8"
+            )
+            status, problems = run_one("C26", make_ctx(fake.root))
+        self.assertEqual(status, "PASS", problems)
 
 
 if __name__ == "__main__":  # pragma: no cover
