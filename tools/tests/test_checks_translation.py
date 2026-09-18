@@ -78,6 +78,28 @@ class TestC24TranslationFreshness(unittest.TestCase):
             status, problems = run_one("C24", make_ctx(tmp))
         self.assertEqual(status, "PASS", problems)
 
+    def test_valid_marker_plus_malformed_duplicate_fails(self) -> None:
+        # C24's own message has always promised "expected exactly one
+        # line", but it counted only well-formed markers, so a malformed
+        # duplicate hid behind a valid one and the check passed while
+        # --update-digests refused the very same file.  Counting
+        # candidates makes the check keep the promise it already made.
+        digest = source_digest()
+        malformed = "<!-- translation-of: README.md sha256:BADBAD -->"
+        doubled = translation_text(marker(digest)).replace(
+            marker(digest), f"{marker(digest)}\n{malformed}", 1
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(
+                tmp,
+                {SOURCE_REL: SOURCE_TEXT, TRANSLATION_REL: doubled},
+            )
+            status, problems = run_one("C24", make_ctx(tmp))
+        self.assertEqual(status, "FAIL", problems)
+        joined = " ".join(problems)
+        self.assertIn("found 2 source", joined)
+        self.assertIn(TRANSLATION_REL, joined)
+
     def test_stale_digest_without_release_warns_and_exits_zero(self) -> None:
         stale_digest = "0" * 16
         self.assertNotEqual(stale_digest, source_digest())

@@ -2077,29 +2077,29 @@ def check_c24(ctx: Context) -> list[str]:
         source_name = Path(source_rel).name
         text = read_text(root / translation_rel)
 
-        digest_matches = []
-        for line in text.splitlines():
-            match = DIGEST_RE.match(line)
-            if match and match.group(1) == source_name:
-                digest_matches.append(match)
+        # Count marker *candidates*, not only well-formed ones: a valid
+        # marker sitting next to a malformed duplicate for the same source
+        # used to read as exactly one marker here, so the duplicate passed
+        # unnoticed while --update-digests refused the same file. The two
+        # now agree. See ``_marker_candidates``.
+        candidates = _marker_candidates(text, source_name)
 
-        if not digest_matches:
+        if len(candidates) > 1:
+            problems.append(
+                f"{translation_rel}: found {len(candidates)} source "
+                f"marker lines for {source_name} (expected exactly one line "
+                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
+            )
+            continue
+
+        digest_match = DIGEST_RE.match(candidates[0].group(0)) if candidates else None
+        if digest_match is None or digest_match.group(1) != source_name:
             problems.append(
                 f"{translation_rel}: missing or malformed source marker for "
                 f"{source_name} (expected exactly one line "
                 f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
             )
             continue
-
-        if len(digest_matches) > 1:
-            problems.append(
-                f"{translation_rel}: found {len(digest_matches)} source "
-                f"marker lines for {source_name} (expected exactly one line "
-                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
-            )
-            continue
-
-        digest_match = digest_matches[0]
 
         source_path = root / source_rel
         if not source_path.is_file():
