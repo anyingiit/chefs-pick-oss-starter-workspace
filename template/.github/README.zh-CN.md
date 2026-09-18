@@ -5,7 +5,7 @@
 
 > 英文版是规范版本。本页与 [README.md](README.md) 不一致时，以英文版为准。
 
-<!-- translation-of: README.md sha256:af7aa95fee289ebd -->
+<!-- translation-of: README.md sha256:78e378abcfaabf21 -->
 
 本模板为新建的开源仓库提供协作所需的全部文件。每个模块都采用社区已广泛认可的选型，开箱即用；每一项选择都注明其来源、认可度证据和核实日期——而不仅仅是作者的个人偏好。
 
@@ -87,7 +87,7 @@ git rm -r .github/README.md .github/README.zh-CN.md .github/chefs-pick
 git commit -m "chore: remove template guide"
 ```
 
-如果在网页端操作，删除本文件和 `.github/chefs-pick` 目录即可，效果相同。
+如果在网页端操作，删除 `.github/README.md`、`.github/README.zh-CN.md` 和 `.github/chefs-pick` 目录，效果相同。
 
 <!-- anchor: feedback-and-contact -->
 ## 反馈与联系

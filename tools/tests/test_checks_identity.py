@@ -203,6 +203,29 @@ def guidance_guide() -> str:
     )
 
 
+def guidance_guide_tilde() -> str:
+    """Same as ``guidance_guide()``, but fenced with ``~~~`` instead of
+
+    ```` ``` ````. tooling-delta.md §8.2's fenced-code exemption applies to
+    either fence character (research.md R6), so this must pass exactly
+    like ``guidance_guide()`` does.
+    """
+    return (
+        "# Module guide\n\n"
+        "This page walks through each module in plain English prose.\n\n"
+        "## Translating your own README\n\n"
+        "You can copy these two lines directly into your own files.\n\n"
+        "In `README.md`:\n\n"
+        "~~~markdown\n"
+        "**English** · [简体中文](README.zh-CN.md)\n"
+        "~~~\n\n"
+        "In `README.zh-CN.md`:\n\n"
+        "~~~markdown\n"
+        "[English](README.md) · **简体中文**\n"
+        "~~~\n"
+    )
+
+
 GUIDANCE_CHANGELOG = (
     "# Template changelog\n"
     "\n"
@@ -365,6 +388,15 @@ class TestC11LanguageStructure(CheckTestCase):
         # fenced code block. That is example text for the reader to copy,
         # not this document's own language entry, so it must not FAIL.
         self.assertPass("C11", {".github/chefs-pick/GUIDE.md": guidance_guide()})
+
+    def test_pass_selector_demo_inside_tilde_fenced_code_block_is_ignored(self):
+        # FIXED (Finding 5): ``_strip_fenced_code`` used to recognise only
+        # backtick fences. The same "Translating your own README" demo,
+        # fenced with ``~~~`` instead, must be ignored exactly like the
+        # backtick-fenced version is.
+        self.assertPass(
+            "C11", {".github/chefs-pick/GUIDE.md": guidance_guide_tilde()}
+        )
 
     # -- 1. Purity ---------------------------------------------------------
 

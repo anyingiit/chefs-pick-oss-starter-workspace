@@ -182,6 +182,55 @@ class TestC24TranslationFreshness(unittest.TestCase):
     # See test_missing_source_file_fails_not_skips below.
     # ------------------------------------------------------------------
 
+    def test_files_naming_only_source_still_catches_stale_translation(self) -> None:
+        # FIXED (Finding 1): a source/translation pair is selected when
+        # EITHER member is selected, not only when the translation itself
+        # is named. Naming just the English source with --files must not
+        # let a stale translation slip through as an unselected PASS.
+        stale_digest = "0" * 16
+        self.assertNotEqual(stale_digest, source_digest())
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(
+                tmp,
+                {
+                    SOURCE_REL: SOURCE_TEXT,
+                    TRANSLATION_REL: translation_text(marker(stale_digest)),
+                },
+            )
+            ctx = make_ctx(tmp, files=[SOURCE_REL])
+            with self.assertRaises(ct.WarnCheck) as caught:
+                ct.check_c24(ctx)
+            self.assertTrue(
+                any(TRANSLATION_REL in p for p in caught.exception.args[0]),
+                caught.exception.args[0],
+            )
+
+    def test_duplicate_source_markers_fail(self) -> None:
+        # FIXED (Finding 6, uniqueness half): two marker lines for the same
+        # source must FAIL outright, naming the file and how many markers
+        # were found, rather than silently using whichever comes first.
+        digest = source_digest()
+        duplicated = "\n".join(
+            [marker(digest), marker("0" * 16), "# 主厨精选 OSS 启动模板", ""]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(
+                tmp,
+                {
+                    SOURCE_REL: SOURCE_TEXT,
+                    TRANSLATION_REL: duplicated,
+                },
+            )
+            status, problems = run_one("C24", make_ctx(tmp))
+        self.assertEqual(status, "FAIL", problems)
+        self.assertTrue(
+            any(
+                TRANSLATION_REL in p and "2" in p and "README.md" in p
+                for p in problems
+            ),
+            problems,
+        )
+
     def test_missing_source_file_fails_not_skips(self) -> None:
         # The translation exists and has a well-formed marker, but the
         # source file it names is not present anywhere in the tree.
@@ -238,6 +287,74 @@ class TestUpdateDigests(unittest.TestCase):
         # unchanged -- this is the "only that one line" assertion.
         self.assertEqual(after_lines[1:], before_lines[1:])
         self.assertEqual(len(after_lines), len(before_lines))
+
+    def test_duplicate_markers_refused_and_file_left_untouched(self) -> None:
+        # FIXED (Finding 6, uniqueness half): update_digests must not
+        # silently update whichever duplicate marker comes first -- it must
+        # refuse the file, print a clear message, and leave every byte of
+        # the file untouched.
+        stale_digest = "0" * 16
+        before_text = "\n".join(
+            [marker(stale_digest), marker("1" * 16), "# 主厨精选 OSS 启动模板", ""]
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, {SOURCE_REL: SOURCE_TEXT, TRANSLATION_REL: before_text})
+            translation_path = Path(tmp) / TRANSLATION_REL
+            before_bytes = translation_path.read_bytes()
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(Path(tmp))
+
+            after_bytes = translation_path.read_bytes()
+
+        self.assertEqual(before_bytes, after_bytes)
+        output = out.getvalue()
+        self.assertIn(TRANSLATION_REL, output)
+        self.assertIn("2", output)
+        self.assertIn("README.md", output)
+
+    def test_mixed_crlf_lf_endings_only_digest_bytes_change(self) -> None:
+        # FIXED (Finding 4): update_digests must not open the file in text
+        # mode (which would translate every "\n" to os.linesep on write),
+        # and must not split on a single detected newline style (which
+        # would corrupt marker detection / leave stray "\n" characters
+        # embedded when a file mixes CRLF and LF). Every byte outside the
+        # marker's digest must be identical before and after.
+        stale_digest = "0" * 16
+        correct_digest = source_digest()
+        # A deliberately mixed-ending file: the marker line ends CRLF, the
+        # rest end LF only.
+        before_bytes = (
+            marker(stale_digest).encode("utf-8")
+            + b"\r\n"
+            + "# 主厨精选 OSS 启动模板".encode("utf-8")
+            + b"\n"
+            + b"\n"
+            + "中文内容，包含标点。".encode("utf-8")
+            + b"\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            write_tree(tmp, {SOURCE_REL: SOURCE_TEXT})
+            translation_path = Path(tmp) / TRANSLATION_REL
+            translation_path.write_bytes(before_bytes)
+
+            with contextlib.redirect_stdout(io.StringIO()) as out:
+                ct.update_digests(Path(tmp))
+
+            after_bytes = translation_path.read_bytes()
+
+        self.assertIn(stale_digest, out.getvalue())
+        self.assertIn(correct_digest, out.getvalue())
+
+        expected_bytes = (
+            marker(correct_digest).encode("utf-8")
+            + before_bytes[len(marker(stale_digest).encode("utf-8")) :]
+        )
+        self.assertEqual(after_bytes, expected_bytes)
+        # Explicitly confirm the CRLF right after the marker, and the bare
+        # LF endings later in the file, both survive untouched.
+        self.assertIn(b"-->\r\n", after_bytes)
+        self.assertNotIn(b"\r\n" + "中文内容，包含标点。".encode("utf-8"), after_bytes)
 
     def test_idempotent_second_run_updates_nothing(self) -> None:
         correct_digest = source_digest()

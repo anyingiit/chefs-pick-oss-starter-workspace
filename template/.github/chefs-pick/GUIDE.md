@@ -62,7 +62,7 @@ It states the rules of participation and the reporting channel up front, so that
 
 ### Customize
 
-Fill in the placeholder for the reporting email address; it is the only thing in the file you must change. Projects working in Chinese can link the official Chinese translation, see [Translating your own README](#translating-your-own-readme).
+Fill in the placeholder for the reporting email address; it is the only thing in the file you must change. Projects working in Chinese can swap in the official Chinese translation; its link is in the collaboration-file table under [Translating your own README](#translating-your-own-readme).
 
 ### Remove
 
