@@ -1,0 +1,12 @@
+jobs:
+  lint:
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./local-action
+      - uses: docker://alpine:3
+      - name: script mentioning uses
+        run: |
+          #   uses: actions/checkout@v4
+          echo "uses: foo@v1"
+  reuse:
+    uses: owner/repo/.github/workflows/x.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.3
