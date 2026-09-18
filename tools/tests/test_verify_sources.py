@@ -97,16 +97,16 @@ def sources_md(rows=None, verified: str = BASE_VERIFIED) -> str:
             "\n"
             "| 字段 / Field | 内容 / Value |\n"
             "|---|---|\n"
-            "| 认可度证据 / Evidence | 精确 Star 数 / Exact stars："
+            "| Evidence | Exact stars: "
             f"★ {row['stars']} ({row['repo']}) |\n"
-            f"| 核实日期 / Verified | {verified} |\n"
+            f"| Verified | {verified} |\n"
         )
     return (
-        "# 选型清单 / Selection list\n"
+        "# Selection list\n"
         "\n"
-        f"数据核实日期 / Data verified: {verified}\n"
+        f"Data verified: {verified}\n"
         "\n"
-        "## 模块 / Modules\n"
+        "## Modules\n"
         "\n"
         + "\n".join(sections)
         + "\n"
@@ -132,7 +132,7 @@ def readme_md(rows=None, verified: str = BASE_VERIFIED) -> str:
         "## 主厨精选一览 / The picks at a glance\n"
         "\n"
         "<!-- summary:start -->\n"
-        "| 模块 / Module | 选定来源 / Pick | 认可度 / Adoption | 核实日期 / Verified |\n"
+        "| Module | Pick | Adoption | Verified |\n"
         "|---|---|---|---|\n"
         f"{summary}\n"
         "<!-- summary:end -->\n"
@@ -277,9 +277,9 @@ class ApplyUpdatesTests(unittest.TestCase):
         sources = self.updated[SOURCES_REL]
         readme = self.updated[README_REL]
         # 1. the "Data verified" line
-        self.assertIn("数据核实日期 / Data verified: 2026-09-18", sources)
+        self.assertIn("Data verified: 2026-09-18", sources)
         # 2. every module field-table "Verified" cell
-        self.assertEqual(sources.count("| 核实日期 / Verified | 2026-09-18 |"), 2)
+        self.assertEqual(sources.count("| Verified | 2026-09-18 |"), 2)
         # 3. the "Verified" column of the adoption data table
         self.assertEqual(sources.count("| no | 2026-09-18 |"), 2)
         # 4. the "Verified" column of the summary table on the home page
@@ -453,7 +453,7 @@ class MainExitCodeTests(TempTemplateCase):
         after = self.snapshot()
         self.assertIn("★ 16,500 (othneildrew/Best-README-Template)", after[SOURCES_REL])
         self.assertIn("★ 176,000 (github/gitignore)", after[README_REL])
-        self.assertIn("数据核实日期 / Data verified: 2026-09-18", after[SOURCES_REL])
+        self.assertIn("Data verified: 2026-09-18", after[SOURCES_REL])
         self.assertIn(
             "| github/gitignore | 176,000 | 82,500 | 2026-08-30 "
             "| CC0-1.0 | no | 2026-09-18 |",
