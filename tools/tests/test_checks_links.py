@@ -2,8 +2,12 @@
 C17 Removal notes and C22 Removal simulation.
 
 See ``specs/001-chefs-pick-starter/contracts/tooling.md`` §1.1, §1.3 and §3,
-``specs/001-chefs-pick-starter/contracts/template-layout.md`` §3 and §6, and
-``specs/001-chefs-pick-starter/contracts/project-files.md`` M02.
+``specs/001-chefs-pick-starter/contracts/template-layout.md`` §3 and §6,
+``specs/001-chefs-pick-starter/contracts/project-files.md`` M02, and
+``specs/002-english-first-docs/contracts/tooling-delta.md`` §4 (the new
+``CLEANUP_COMMAND`` and deleted-file set for C13/C22, and C17's English
+literals) and §8.3 (``_iter_links`` stripping fenced code blocks before C14
+looks for link targets).
 """
 
 from __future__ import annotations
@@ -14,6 +18,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import check_template as ct  # noqa: E402
 from helpers import make_ctx, run_one, write_tree  # noqa: E402
@@ -143,6 +148,19 @@ class TestC13CleanupSimulation(unittest.TestCase):
             self.assertEqual(status, "FAIL", problems)
             self.assertTrue(problems)
 
+    def test_fail_project_file_still_links_to_readme_zh_cn(self):
+        """tooling-delta.md §4 C13/C22: the deleted set now also includes
+        ``.github/README.zh-CN.md``; a surviving link to it must FAIL."""
+        with tempfile.TemporaryDirectory() as tmp:
+            files = cleanup_tree()
+            files["README.md"] += (
+                "\nRead this in [Chinese](.github/README.zh-CN.md) too.\n"
+            )
+            root = write_tree(tmp, files)
+            status, problems = run_one("C13", make_ctx(root))
+            self.assertEqual(status, "FAIL", problems)
+            self.assertTrue(problems)
+
     def test_skip_without_root_readme(self):
         with tempfile.TemporaryDirectory() as tmp:
             files = cleanup_tree()
@@ -239,6 +257,31 @@ class TestC14RelativeLinks(unittest.TestCase):
             self.assertEqual(status, "FAIL", problems)
             self.assertTrue(problems)
 
+    def test_pass_fenced_code_block_link_is_ignored(self):
+        """tooling-delta.md §8.3: ``_iter_links`` strips fenced code blocks,
+        so a tutorial snippet showing the language-selector syntax (which
+        points at a file that does not exist alongside the guide) is not
+        treated as a real link."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = write_tree(
+                tmp,
+                {
+                    ct.GUIDANCE_DIR + "/GUIDE.md": (
+                        "# Module guide\n"
+                        "\n"
+                        "## Translating your own README\n"
+                        "\n"
+                        "Add a language selector like this:\n"
+                        "\n"
+                        "```markdown\n"
+                        "[English](README.md) · **简体中文**\n"
+                        "```\n"
+                    ),
+                },
+            )
+            status, problems = run_one("C14", make_ctx(root))
+            self.assertEqual(status, "PASS", problems)
+
     def test_fail_project_file_links_into_guidance_layer(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = write_tree(
@@ -314,16 +357,23 @@ class TestC15License(unittest.TestCase):
 
 
 def guide_md(sections: dict[str, list[str]]) -> str:
-    """A GUIDE.md whose ``## Mxx`` sections name the referring files."""
-    parts = ["# 模块指南 / Module guide\n"]
+    """A GUIDE.md whose ``## Mxx`` sections name the referring files.
+
+    tooling-delta.md §4 C17: the ``### Remove`` sub-section's literals are
+    now English (``- Delete:``, ``- Update:``, ``- What you lose:``).
+    """
+    parts = ["# Module guide\n"]
     for module in sorted(sections):
         refs = sections[module]
         listed = ", ".join(f"`{ref}`" for ref in refs) if refs else "no other file"
         parts.append(
-            f"\n## {module} 模块 / Module {module}\n"
+            f"\n## {module} module\n"
             "\n"
-            "如何删除 / Remove: delete the files of this module, then update "
-            f"{listed}.\n"
+            "### Remove\n"
+            "\n"
+            "- Delete: the files of this module.\n"
+            f"- Update: {listed}.\n"
+            "- What you lose: the guidance this module provided.\n"
         )
     return "".join(parts)
 

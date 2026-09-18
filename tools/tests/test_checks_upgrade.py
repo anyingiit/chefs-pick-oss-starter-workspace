@@ -28,25 +28,12 @@ import check_template as ct  # noqa: E402
 
 UPGRADE_PATH = f"{ct.GUIDANCE_DIR}/UPGRADE-TO-TEAM.md"
 
-# The English fragment C19 matches on -> the Chinese half of the bilingual
-# heading in guidance-layer.md §6.  Unknown fragments fall back to an
-# English-only heading, which still carries the fragment.
-CHINESE_HALF = {
-    "Common additions": "常用增强项",
-    "When to upgrade": "何时升级",
-    "When you need foundation-level governance": "需要基金会级治理时",
-    "What to add": "需要添加的内容",
-    "No longer recommended": "不再推荐",
-    "What not to add": "不需要添加的内容",
-}
-
-TITLE = "# 升级为团队项目 / Growing into a team project"
+TITLE = "# Growing into a team project"
 
 
 def heading(english: str) -> str:
-    """The bilingual level-2 heading carrying *english*, as §6 writes them."""
-    chinese = CHINESE_HALF.get(english)
-    return f"## {chinese} / {english}" if chinese else f"## {english}"
+    """The level-2 heading carrying *english*, as §6 writes them."""
+    return f"## {english}"
 
 
 def upgrade_md(headings) -> str:
@@ -54,14 +41,13 @@ def upgrade_md(headings) -> str:
     parts = [
         TITLE,
         "",
-        "本页是可选的简要参考，5 分钟内可以读完。",
         "This page is an optional short reference; it reads in five minutes.",
         "",
     ]
     for english in headings:
         parts.append(heading(english))
         parts.append("")
-        parts.append(f"说明 / Notes for {english}.")
+        parts.append(f"Notes for {english}.")
         parts.append("")
     return "\n".join(parts).rstrip("\n") + "\n"
 
