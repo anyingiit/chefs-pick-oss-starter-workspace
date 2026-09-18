@@ -101,7 +101,7 @@ git rm -r .github/README.md .github/README.zh-CN.md .github/chefs-pick
 git commit -m "chore: remove template guide"
 ```
 
-On the web, delete this file and the `.github/chefs-pick` directory; the result is the same.
+On the web, delete `.github/README.md`, `.github/README.zh-CN.md` and the `.github/chefs-pick` directory; the result is the same.
 
 <!-- anchor: feedback-and-contact -->
 ## Feedback and contact

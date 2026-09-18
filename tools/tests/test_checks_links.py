@@ -282,6 +282,31 @@ class TestC14RelativeLinks(unittest.TestCase):
             status, problems = run_one("C14", make_ctx(root))
             self.assertEqual(status, "PASS", problems)
 
+    def test_pass_tilde_fenced_code_block_link_is_ignored(self):
+        # FIXED (Finding 5): ``_strip_fenced_code`` used to recognise only
+        # backtick fences, so a ``~~~`` block's relative-link-looking
+        # content reached C14 as if it were real prose. It must be
+        # stripped exactly like a backtick fence is.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = write_tree(
+                tmp,
+                {
+                    ct.GUIDANCE_DIR + "/GUIDE.md": (
+                        "# Module guide\n"
+                        "\n"
+                        "## Translating your own README\n"
+                        "\n"
+                        "Add a language selector like this:\n"
+                        "\n"
+                        "~~~markdown\n"
+                        "[English](README.md) · **简体中文**\n"
+                        "~~~\n"
+                    ),
+                },
+            )
+            status, problems = run_one("C14", make_ctx(root))
+            self.assertEqual(status, "PASS", problems)
+
     def test_fail_project_file_links_into_guidance_layer(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = write_tree(

@@ -428,7 +428,7 @@ def parse_date(value: str) -> _dt.date | None:
 # Language-purity helpers (tooling-delta.md §1.3/§3, research.md R6)
 # --------------------------------------------------------------------------
 
-_FENCE_TOGGLE_RE = re.compile(r"^\s*```")
+_FENCE_TOGGLE_RE = re.compile(r"^\s*(```|~~~)")
 _HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
 _INLINE_CODE_RE = re.compile(r"`[^`]*`")
 _MD_LINK_TARGET_RE = re.compile(r"(\[[^\]]*\])\([^)]*\)")
@@ -442,13 +442,28 @@ _PARAGRAPH_BREAK_RE = re.compile(r"\n[ \t]*\n")
 
 
 def _strip_fenced_code(text: str) -> str:
-    """Delete fenced code blocks, including the fence lines themselves."""
+    """Delete fenced code blocks, including the fence lines themselves.
+
+    Recognises both ``` and ``~~~`` fences, consistent with
+    ``_anchor_lines``. A fence opened with one character is only closed by
+    that same character -- a stray fence of the other kind nested inside
+    does not toggle it back out.
+    """
     out = []
     in_fence = False
+    fence_char = None
     for line in text.split("\n"):
-        if _FENCE_TOGGLE_RE.match(line):
-            in_fence = not in_fence
-            continue
+        match = _FENCE_TOGGLE_RE.match(line)
+        if match:
+            this_char = match.group(1)[0]
+            if not in_fence:
+                in_fence = True
+                fence_char = this_char
+                continue
+            if this_char == fence_char:
+                in_fence = False
+                fence_char = None
+                continue
         if not in_fence:
             out.append(line)
     return "\n".join(out)
@@ -2043,25 +2058,34 @@ def check_c24(ctx: Context) -> list[str]:
     problems: list[str] = []
     stale: list[str] = []
     for translation_rel, source_rel in sorted(translations.items()):
-        if not selected(ctx, translation_rel):
+        if not (selected(ctx, translation_rel) or selected(ctx, source_rel)):
             continue
         source_name = Path(source_rel).name
         text = read_text(root / translation_rel)
 
-        digest_match = None
+        digest_matches = []
         for line in text.splitlines():
             match = DIGEST_RE.match(line)
             if match and match.group(1) == source_name:
-                digest_match = match
-                break
+                digest_matches.append(match)
 
-        if digest_match is None:
+        if not digest_matches:
             problems.append(
                 f"{translation_rel}: missing or malformed source marker for "
                 f"{source_name} (expected exactly one line "
                 f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
             )
             continue
+
+        if len(digest_matches) > 1:
+            problems.append(
+                f"{translation_rel}: found {len(digest_matches)} source "
+                f"marker lines for {source_name} (expected exactly one line "
+                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
+            )
+            continue
+
+        digest_match = digest_matches[0]
 
         source_path = root / source_rel
         if not source_path.is_file():
@@ -2112,25 +2136,38 @@ def update_digests(template_dir: Path) -> None:
         source_name = Path(source_rel).name
 
         translation_path = template_dir / translation_rel
-        raw = translation_path.read_bytes()
-        text = raw.decode("utf-8")
-        newline = "\r\n" if "\r\n" in text else "\n"
-        lines = text.split(newline)
+        text = translation_path.read_bytes().decode("utf-8")
 
-        changed = False
-        old_digest = None
-        for index, line in enumerate(lines):
-            match = DIGEST_RE.match(line)
-            if not match or match.group(1) != source_name:
-                continue
-            old_digest = match.group(2)
-            if old_digest != digest:
-                lines[index] = f"<!-- translation-of: {source_name} sha256:{digest} -->"
-                changed = True
-            break
+        # Match the marker line's text only, without consuming the line
+        # ending -- a lookahead for an optional trailing "\r" (before the
+        # "\n" that (?m) $ matches against) means the substitution below
+        # never touches a line-ending byte, whatever it is (tooling-delta.md
+        # §1.2). Using a regex over the whole decoded text, rather than
+        # splitting on a single detected newline, also means a file mixing
+        # CRLF and LF still has every one of its marker lines found.
+        marker_re = re.compile(
+            r"(?m)^<!-- translation-of: "
+            + re.escape(source_name)
+            + r" sha256:([0-9a-f]{16}) -->(?=\r?$)"
+        )
+        matches = list(marker_re.finditer(text))
 
-        if changed:
-            translation_path.write_text(newline.join(lines), encoding="utf-8")
+        if not matches:
+            continue
+
+        if len(matches) > 1:
+            print(
+                f"{translation_rel}: skipped (found {len(matches)} source "
+                f"marker lines for {source_name}; expected exactly one)"
+            )
+            continue
+
+        match = matches[0]
+        old_digest = match.group(1)
+        if old_digest != digest:
+            new_line = f"<!-- translation-of: {source_name} sha256:{digest} -->"
+            new_text = text[: match.start()] + new_line + text[match.end() :]
+            translation_path.write_bytes(new_text.encode("utf-8"))
             print(f"{translation_rel}: {old_digest} -> {digest}")
             any_updated = True
 
