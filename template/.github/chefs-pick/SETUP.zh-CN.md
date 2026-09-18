@@ -5,7 +5,7 @@
 
 > 英文版是规范版本。本页与 [SETUP.md](SETUP.md) 不一致时，以英文版为准。
 
-<!-- translation-of: SETUP.md sha256:0000000000000000 -->
+<!-- translation-of: SETUP.md sha256:6bdae509fc798858 -->
 
 按顺序完成这份清单，大约需要 15 分钟。先替换占位符，再完成仓库设置和项目文件，最后移除本引导层。
 
