@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import hashlib
 import re
 import sys
 from dataclasses import dataclass
@@ -50,7 +51,9 @@ REQUIRED_FILES = [
     ".github/CODEOWNERS",
     ".github/FUNDING.yml",
     ".github/README.md",
+    ".github/README.zh-CN.md",
     ".github/chefs-pick/SETUP.md",
+    ".github/chefs-pick/SETUP.zh-CN.md",
     ".github/chefs-pick/GUIDE.md",
     ".github/chefs-pick/SOURCES.md",
     ".github/chefs-pick/MAINTAINING.md",
@@ -196,32 +199,30 @@ REMOVAL_REFS = {
     "M16": ([".github/FUNDING.yml"], []),
 }
 
-# guidance-layer.md §4.2
+# guidance-layer.md §4.2 (tooling-delta.md §2)
 FIELD_LABELS = [
-    "文件 / Files",
-    "级别 / Level",
-    "选定来源 / Pick",
-    "版本或提交 / Version",
-    "上游许可证 / Upstream license",
-    "认可度证据 / Evidence",
-    "取舍规则 / Rule",
-    "核实日期 / Verified",
+    "Files",
+    "Level",
+    "Pick",
+    "Version",
+    "Upstream license",
+    "Evidence",
+    "Rule",
+    "Verified",
 ]
 
 LEVEL_VALUES = [
-    "必需 / Required",
-    "推荐 / Recommended",
-    "可选 / Optional",
-    "可选（只推荐）/ Optional (recommendation only)",
+    "Required",
+    "Recommended",
+    "Optional",
+    "Optional (recommendation only)",
 ]
 
-# guidance-layer.md §2
-PLACEHOLDER_TABLE_HEADER = (
-    "| 占位符 / Placeholder | 含义 / Meaning | 出现的文件 / Files | 示例 / Example |"
-)
+# guidance-layer.md §2 (tooling-delta.md §2)
+PLACEHOLDER_TABLE_HEADER = "| Placeholder | Meaning | Files | Example |"
 
-# guidance-layer.md §1 §3 §5 §6
-GUIDANCE_HOME_TITLE = "# Chef's Pick OSS Starter · 主厨精选开源仓库起步模板"
+# guidance-layer.md §1 §3 §5 §6 (tooling-delta.md §2)
+GUIDANCE_HOME_TITLE = "# Chef's Pick OSS Starter"
 GUIDE_EXTRA_HEADINGS = [
     "Adding language-specific rules",
     "Pinning actions",
@@ -248,13 +249,16 @@ UPGRADE_HEADINGS = [
 
 # Regular expressions
 PLACEHOLDER_RE = re.compile(r"CHANGEME_[A-Z0-9_]+")
+# Detects template-author identity leaking into a generated repository. This
+# is independent of document language -- "主厨精选" can still appear inside
+# the Chinese translations -- so it is kept as-is (tooling-delta.md §2).
 IDENTITY_RE = re.compile(r"(?i)chef'?s[ -]?pick|主厨精选")
 STAR_RE = re.compile(r"★ ([\d,]+) \(([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\)")
 CJK_RE = re.compile(r"[一-鿿]")
 LATIN_RE = re.compile(r"[A-Za-z]")
 VERSION_HEADING_RE = re.compile(r"^#{1,6} \[(Unreleased|[0-9]+\.[0-9]+\.[0-9]+)\]")
 
-CLEANUP_COMMAND = "git rm -r .github/README.md .github/chefs-pick"
+CLEANUP_COMMAND = "git rm -r .github/README.md .github/README.zh-CN.md .github/chefs-pick"
 
 ADOPTION_START = "<!-- adoption-data:start -->"
 ADOPTION_END = "<!-- adoption-data:end -->"
@@ -263,6 +267,33 @@ SUMMARY_END = "<!-- summary:end -->"
 
 FRESH_DAYS = 183
 RELEASE_FRESH_DAYS = 30
+
+# tooling-delta.md §2 -- language-structure.md-derived constants for
+# discovering and validating translations of the bootstrap-guidance layer.
+TRANSLATED_DOCS = {".github/README.md", ".github/chefs-pick/SETUP.md"}
+SELECTOR_LINES = {  # path -> verbatim language-selector line, language-structure.md §1
+    ".github/README.md": "**English** · [简体中文](README.zh-CN.md)",
+    ".github/README.zh-CN.md": "[English](README.md) · **简体中文**",
+    ".github/chefs-pick/SETUP.md": "**English** · [简体中文](SETUP.zh-CN.md)",
+    ".github/chefs-pick/SETUP.zh-CN.md": "[English](SETUP.md) · **简体中文**",
+}
+ANCHOR_RE = re.compile(r"^<!-- anchor: ([a-z0-9][a-z0-9-]*) -->$")
+DIGEST_RE = re.compile(r"^<!-- translation-of: (\S+) sha256:([0-9a-f]{16}) -->$")
+ANCHOR_SEQUENCES = {  # language-structure.md §3
+    "README": ["chefs-pick-oss-starter", "what-you-get", "required", "recommended",
+               "optional", "the-picks-at-a-glance", "how-we-pick", "quick-start",
+               "good-to-know", "clean-up-when-done", "feedback-and-contact", "license"],
+    "SETUP": ["setup-checklist", "placeholders", "steps"],
+}
+SINGLE_SOURCE_MARKERS = ["| Placeholder | Meaning | Files | Example |",
+                         "<!-- summary:start -->", "<!-- adoption-data:start -->"]
+
+# Translation filenames: "<id>.<lang>.md" with a sibling "<id>.md" in the
+# same directory (tooling-delta.md §1.3, research.md R12). The language
+# list is deliberately not hard-coded.
+TRANSLATION_FILENAME_RE = re.compile(
+    r"^(?P<id>[A-Za-z-]+)\.(?P<lang>[a-z]{2}(-[A-Z]{2})?)\.md$"
+)
 
 
 # --------------------------------------------------------------------------
@@ -274,6 +305,15 @@ class SkipCheck(Exception):
     """Raised by a check function when it has nothing to check."""
 
 
+class WarnCheck(Exception):
+    """Raised by a check function to report non-blocking problems.
+
+    ``args[0]`` is the list of problems, exactly like a normal FAIL return.
+    See tooling-delta.md §1.1: WARN never affects the exit code unless
+    ``--release`` is set, in which case it is counted as FAIL.
+    """
+
+
 @dataclass
 class Context:
     template_dir: Path
@@ -283,7 +323,19 @@ class Context:
 
 
 def is_guidance(rel_path: str) -> bool:
-    return rel_path == GUIDANCE_FILE or rel_path.startswith(GUIDANCE_DIR + "/")
+    if rel_path == GUIDANCE_FILE or rel_path.startswith(GUIDANCE_DIR + "/"):
+        return True
+    # A translation of the home page lives directly beside it, outside
+    # GUIDANCE_DIR (for example ".github/README.zh-CN.md" next to
+    # ".github/README.md") -- tooling-delta.md §1.3, research.md R12. The
+    # language tag is deliberately not hard-coded.
+    home_dir, _, home_name = GUIDANCE_FILE.rpartition("/")
+    path_dir, _, path_name = rel_path.rpartition("/")
+    if path_dir == home_dir:
+        match = TRANSLATION_FILENAME_RE.match(path_name)
+        if match and f"{match.group('id')}.md" == home_name:
+            return True
+    return False
 
 
 def iter_files(root: Path) -> list[str]:
@@ -300,6 +352,32 @@ def iter_files(root: Path) -> list[str]:
 
 def project_files(ctx: Context) -> list[str]:
     return [p for p in iter_files(ctx.template_dir) if not is_guidance(p)]
+
+
+def find_translations(root: Path) -> dict[str, str]:
+    """Discover translations inside the bootstrap-guidance layer.
+
+    Returns ``{translation_rel_path: source_rel_path}``. A file is a
+    translation of ``<id>.md`` whenever its name matches
+    ``TRANSLATION_FILENAME_RE`` (tooling-delta.md §1.3, research.md R12);
+    the paired ``<id>.md`` source is *not* required to already exist for
+    the file to be registered here. Whether the declared source actually
+    exists is a correctness question for callers to judge -- notably
+    C24, which must FAIL (tooling-delta.md §5) rather than silently lose
+    track of a translation whose source is missing. The language list is
+    not hard-coded: any two-letter (optionally regionalised) language tag
+    is accepted.
+    """
+    translations: dict[str, str] = {}
+    for rel in iter_files(root):
+        if not is_guidance(rel):
+            continue
+        match = TRANSLATION_FILENAME_RE.match(Path(rel).name)
+        if not match:
+            continue
+        source_rel = str(Path(rel).with_name(f"{match.group('id')}.md").as_posix())
+        translations[rel] = source_rel
+    return translations
 
 
 def read_text(path: Path) -> str:
@@ -344,6 +422,103 @@ def parse_date(value: str) -> _dt.date | None:
         return _dt.date.fromisoformat(value.strip())
     except ValueError:
         return None
+
+
+# --------------------------------------------------------------------------
+# Language-purity helpers (tooling-delta.md §1.3/§3, research.md R6)
+# --------------------------------------------------------------------------
+
+_FENCE_TOGGLE_RE = re.compile(r"^\s*(```|~~~)")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_INLINE_CODE_RE = re.compile(r"`[^`]*`")
+_MD_LINK_TARGET_RE = re.compile(r"(\[[^\]]*\])\([^)]*\)")
+_BARE_URL_RE = re.compile(r"https?://\S+")
+_ENGLISH_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'’-]*")
+# The allowed separator between two words in the same "run": the ASCII
+# punctuation/space/tab set from research.md R6, plus single newlines (a
+# blank line -- two or more newlines -- still breaks the run).
+_ALLOWED_RUN_SEP_RE = re.compile(r"^[ \t\n,.;:!?()'\"-]*$")
+_PARAGRAPH_BREAK_RE = re.compile(r"\n[ \t]*\n")
+
+
+def _strip_fenced_code(text: str) -> str:
+    """Delete fenced code blocks, including the fence lines themselves.
+
+    Recognises both ``` and ``~~~`` fences, consistent with
+    ``_anchor_lines``. A fence opened with one character is only closed by
+    that same character -- a stray fence of the other kind nested inside
+    does not toggle it back out.
+    """
+    out = []
+    in_fence = False
+    fence_char = None
+    for line in text.split("\n"):
+        match = _FENCE_TOGGLE_RE.match(line)
+        if match:
+            this_char = match.group(1)[0]
+            if not in_fence:
+                in_fence = True
+                fence_char = this_char
+                continue
+            if this_char == fence_char:
+                in_fence = False
+                fence_char = None
+                continue
+        if not in_fence:
+            out.append(line)
+    return "\n".join(out)
+
+
+def strip_for_purity(text: str, selector_line: str | None) -> str:
+    """Strip everything research.md R6 excludes from the purity judgement.
+
+    In order: fenced code blocks (fence lines included), HTML comments,
+    inline code, the ``(target)`` half of Markdown links, bare URLs, and
+    finally the language-selector line itself. The selector line is
+    matched after the same link-target stripping has been applied to it,
+    since by the time step 6 runs, step 4 has already rewritten that line
+    in *text* the same way -- an exact match against the untouched
+    ``selector_line`` string would otherwise never hit.
+    """
+    text = _strip_fenced_code(text)
+    text = _HTML_COMMENT_RE.sub("", text)
+    text = _INLINE_CODE_RE.sub("", text)
+    text = _MD_LINK_TARGET_RE.sub(r"\1", text)
+    text = _BARE_URL_RE.sub("", text)
+    if selector_line is not None:
+        stripped_selector = _MD_LINK_TARGET_RE.sub(r"\1", selector_line)
+        text = "\n".join(
+            line for line in text.split("\n") if line != stripped_selector
+        )
+    return text
+
+
+def cjk_count(text: str) -> int:
+    """Count of CJK Unified Ideographs (U+4E00-U+9FFF) in *text*."""
+    return len(CJK_RE.findall(text))
+
+
+def longest_english_run(text: str) -> int:
+    """Longest run of consecutive English words in *text* (research.md R6).
+
+    A word is ``[A-Za-z][A-Za-z'’-]*``. Two words are part of the same
+    run when only characters from ``[ \\t,.;:!?()'"-]`` (repeatable) or a
+    single newline separate them; a blank line or any other character
+    (including CJK text or full-width punctuation) breaks the run.
+    """
+    words = list(_ENGLISH_WORD_RE.finditer(text))
+    if not words:
+        return 0
+    longest = current = 1
+    for prev, nxt in zip(words, words[1:]):
+        between = text[prev.end():nxt.start()]
+        continues = (
+            _ALLOWED_RUN_SEP_RE.match(between) is not None
+            and _PARAGRAPH_BREAK_RE.search(between) is None
+        )
+        current = current + 1 if continues else 1
+        longest = max(longest, current)
+    return longest
 
 
 # --------------------------------------------------------------------------
@@ -936,87 +1111,252 @@ def _heading_lines(text: str) -> list[tuple[int, str]]:
     return out
 
 
-def check_c11(ctx: Context) -> list[str]:
-    """The guidance layer is bilingual and structurally complete."""
-    problems = []
-    checked = 0
-    root = ctx.template_dir
+def _anchor_lines(text: str) -> list[tuple[int, str]]:
+    """Anchor comment lines outside fenced code blocks, as (line number, id)."""
+    out = []
+    in_fence = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = ANCHOR_RE.match(line)
+        if match:
+            out.append((number, match.group(1)))
+    return out
 
+
+def check_c11(ctx: Context) -> list[str]:
+    """The bootstrap-guidance layer's language structure (tooling-delta.md §4 C11).
+
+    Ten assertions, checked independently so a single file can fail more
+    than one of them; every problem names the file and the assertion it
+    violates (language-structure.md, research.md R6).
+    """
+    problems = []
+    root = ctx.template_dir
     home_rel = GUIDANCE_FILE
-    home = root / home_rel
-    if home.is_file() and selected(ctx, home_rel):
-        checked += 1
-        text = read_text(home)
+    setup_rel = f"{GUIDANCE_DIR}/SETUP.md"
+    changelog_rel = f"{GUIDANCE_DIR}/CHANGELOG.md"
+    license_rel = f"{GUIDANCE_DIR}/LICENSE"
+
+    guidance_all = [
+        rel for rel in iter_files(root) if is_guidance(rel) and selected(ctx, rel)
+    ]
+    if not guidance_all:
+        raise SkipCheck(f"no guidance file present (for example {home_rel})")
+
+    guidance_md = [rel for rel in guidance_all if rel.endswith(".md")]
+    translations = {
+        rel: source for rel, source in find_translations(root).items() if selected(ctx, rel)
+    }
+    # Assertion 4: the four files with a fixed, ordered anchor sequence.
+    anchor_key_by_path = {
+        home_rel: "README",
+        ".github/README.zh-CN.md": "README",
+        setup_rel: "SETUP",
+        f"{GUIDANCE_DIR}/SETUP.zh-CN.md": "SETUP",
+    }
+
+    for rel in guidance_md:
+        path = root / rel
+        text = read_text(path)
+        is_translation = rel in translations
+        selector_line = SELECTOR_LINES.get(rel)
+
+        # --- 1. Purity ---------------------------------------------------
+        stripped = strip_for_purity(text, selector_line)
+        if is_translation:
+            run = longest_english_run(stripped)
+            if run >= 6:
+                problems.append(
+                    f"{rel}: purity: longest run of consecutive English words is "
+                    f"{run} (limit is fewer than 6)"
+                )
+        else:
+            count = cjk_count(stripped)
+            if count:
+                problems.append(
+                    f"{rel}: purity: contains {count} CJK character(s) but must "
+                    "be English-only"
+                )
+
+        # --- 2. Language selector -----------------------------------------
         lines = text.splitlines()
-        if not lines or lines[0] != GUIDANCE_HOME_TITLE:
-            problems.append(
-                f"{home_rel}: first line must be {GUIDANCE_HOME_TITLE!r}, "
-                f"found {(lines[0] if lines else '')!r}"
+        if rel in SELECTOR_LINES:
+            expected = SELECTOR_LINES[rel]
+            indices = [i for i, line in enumerate(lines) if line == expected]
+            if not indices:
+                problems.append(
+                    f"{rel}: language selector: missing the verbatim line {expected!r}"
+                )
+            else:
+                if len(indices) > 1:
+                    problems.append(
+                        f"{rel}: language selector: the line {expected!r} appears "
+                        f"{len(indices)} times, expected exactly once"
+                    )
+                h1_index = next(
+                    (i for i, line in enumerate(lines) if line.startswith("# ")), None
+                )
+                if h1_index is None:
+                    problems.append(f"{rel}: language selector: no H1 heading found")
+                elif indices[0] != h1_index + 2 or lines[h1_index + 1].strip() != "":
+                    problems.append(
+                        f"{rel}: language selector: must appear exactly one blank "
+                        "line after the H1 heading"
+                    )
+
+            # --- 3. Mutual reachability ------------------------------------
+            target_match = re.search(r"\(([^)]+)\)", expected)
+            if target_match:
+                target = target_match.group(1)
+                if not (path.parent / target).is_file():
+                    problems.append(
+                        f"{rel}: mutual reachability: language-selector target "
+                        f"does not exist: {target}"
+                    )
+        else:
+            # Fenced code blocks are excluded here for the same reason as in
+            # the purity check (research.md R6): a tutorial snippet showing
+            # the selector-line convention (for example GUIDE.md's
+            # "Translating your own README" section) is not itself a
+            # language entry into this document.
+            prose = _strip_fenced_code(text)
+            for value in SELECTOR_LINES.values():
+                if value in prose:
+                    problems.append(
+                        f"{rel}: language selector: must not contain a "
+                        f"language-selector line: {value!r}"
+                    )
+            for bad in ("](README.zh-CN.md)", "](SETUP.zh-CN.md)"):
+                if bad in prose:
+                    problems.append(
+                        f"{rel}: language selector: must not link to a "
+                        f"translation: {bad}"
+                    )
+
+        # --- 4. Anchors ------------------------------------------------
+        anchors = _anchor_lines(text)
+        headings = _heading_lines(text)
+        if rel in anchor_key_by_path:
+            key = anchor_key_by_path[rel]
+            expected_seq = ANCHOR_SEQUENCES[key]
+            actual_seq = [anchor_id for _n, anchor_id in anchors]
+            if actual_seq != expected_seq:
+                missing = [a for a in expected_seq if a not in actual_seq]
+                unexpected = [a for a in actual_seq if a not in expected_seq]
+                message = (
+                    f"{rel}: anchors: sequence does not match the {key} "
+                    f"sequence\n    expected: {expected_seq}\n    found:    {actual_seq}"
+                )
+                if missing:
+                    message += f"\n    missing:    {missing}"
+                if unexpected:
+                    message += f"\n    unexpected: {unexpected}"
+                problems.append(message)
+            anchor_line_numbers = {number for number, _id in anchors}
+            for number, heading_text in headings:
+                if (number - 1) not in anchor_line_numbers:
+                    problems.append(
+                        f"{rel}:{number}: anchors: heading has no anchor line "
+                        f"directly above it: {heading_text}"
+                    )
+            if len(anchors) != len(headings):
+                problems.append(
+                    f"{rel}: anchors: anchor count ({len(anchors)}) does not "
+                    f"equal heading count ({len(headings)})"
+                )
+        else:
+            if anchors:
+                found = ", ".join(f"{number}:{anchor_id}" for number, anchor_id in anchors)
+                problems.append(
+                    f"{rel}: anchors: must not contain anchor lines (only README "
+                    f"and SETUP may): {found}"
+                )
+
+        # --- 5. Normative-version notice (translation side) -------------
+        if is_translation:
+            source_name = Path(translations[rel]).name
+            notice = (
+                f"> 英文版是规范版本。本页与 [{source_name}]({source_name}) "
+                "不一致时，以英文版为准。"
             )
+            if notice not in text:
+                problems.append(
+                    f"{rel}: normative notice: missing the verbatim notice: {notice!r}"
+                )
+
+        # --- 7. Single-source markers -------------------------------------
+        if is_translation:
+            for marker in SINGLE_SOURCE_MARKERS:
+                if marker in text:
+                    problems.append(
+                        f"{rel}: single source: must not contain the "
+                        f"single-source marker: {marker!r}"
+                    )
+
+    # --- 5 (English side) ----------------------------------------------
+    for source_rel in TRANSLATED_DOCS:
+        source_path = root / source_rel
+        if not source_path.is_file() or not selected(ctx, source_rel):
+            continue
+        source_name = Path(source_rel).name
+        notice = (
+            f"> 英文版是规范版本。本页与 [{source_name}]({source_name}) "
+            "不一致时，以英文版为准。"
+        )
+        if notice in read_text(source_path):
+            problems.append(
+                f"{source_rel}: normative notice: the English original must not "
+                f"contain the normative-version notice: {notice!r}"
+            )
+
+    # --- 6. Home page: first line is an anchor, second is the title -----
+    if home_rel in guidance_all:
+        lines = read_text(root / home_rel).splitlines()
+        first = lines[0] if lines else ""
+        second = lines[1] if len(lines) > 1 else ""
+        if not ANCHOR_RE.match(first):
+            problems.append(
+                f"{home_rel}: home page: first line must be an anchor line, "
+                f"found {first!r}"
+            )
+        if second != GUIDANCE_HOME_TITLE:
+            problems.append(
+                f"{home_rel}: home page: second line must be "
+                f"{GUIDANCE_HOME_TITLE!r}, found {second!r}"
+            )
+
+        # --- 8. Preserved assertions -------------------------------------
+        text = read_text(root / home_rel)
         for needed in (
             CLEANUP_COMMAND,
             "chefs-pick/SETUP.md",
             "chefs-pick/GUIDE.md",
-            "## 反馈与联系 / Feedback and contact",
+            "## Feedback and contact",
         ):
             if needed not in text:
                 problems.append(f"{home_rel}: missing required string: {needed}")
 
-    # Bilingual headings across every guidance markdown file.
-    for rel in iter_files(root):
-        if not is_guidance(rel) or not rel.endswith(".md"):
-            continue
-        if not selected(ctx, rel):
-            continue
-        if rel != home_rel:
-            checked += 1
-        for number, line in _heading_lines(read_text(root / rel)):
-            if VERSION_HEADING_RE.match(line):
-                continue
-            if not (CJK_RE.search(line) and LATIN_RE.search(line)):
-                problems.append(
-                    f"{rel}:{number}: heading must be bilingual (Chinese and English): {line}"
-                )
-
-    setup_rel = f"{GUIDANCE_DIR}/SETUP.md"
-    setup = root / setup_rel
-    if setup.is_file() and selected(ctx, setup_rel):
-        text = read_text(setup)
-        for index in range(1, 10):
-            token = f"S{index:02d}"
-            if token not in text:
-                problems.append(f"{setup_rel}: missing step {token}")
-        if PLACEHOLDER_TABLE_HEADER not in text:
-            problems.append(
-                f"{setup_rel}: missing the placeholder table header: "
-                f"{PLACEHOLDER_TABLE_HEADER}"
-            )
-
-    guide_rel = f"{GUIDANCE_DIR}/GUIDE.md"
-    guide = root / guide_rel
-    if guide.is_file() and selected(ctx, guide_rel):
-        text = read_text(guide)
-        headings = [line for _n, line in _heading_lines(text)]
-        for index in range(1, 17):
-            token = f"## M{index:02d}"
-            if not any(line.startswith(token) for line in headings):
-                problems.append(f"{guide_rel}: missing heading starting with {token}")
-        for english in GUIDE_EXTRA_HEADINGS:
-            if not any(line.startswith("## ") and english in line for line in headings):
-                problems.append(f"{guide_rel}: missing the '{english}' heading")
-
-    changelog_rel = f"{GUIDANCE_DIR}/CHANGELOG.md"
-    changelog = root / changelog_rel
-    if changelog.is_file() and selected(ctx, changelog_rel):
-        text = read_text(changelog)
+    # --- 9. Template changelog has at least one version heading ---------
+    if changelog_rel in guidance_all:
+        text = read_text(root / changelog_rel)
         if not any(line.startswith("## [") for line in text.splitlines()):
             problems.append(f"{changelog_rel}: no '## [' version heading")
 
-    license_rel = f"{GUIDANCE_DIR}/LICENSE"
-    license_path = root / license_rel
-    if license_path.is_file() and selected(ctx, license_rel):
-        checked += 1
-        lines = read_text(license_path).splitlines()
+    # --- 10. Template LICENSE: purity, then line 3 -----------------------
+    if license_rel in guidance_all:
+        text = read_text(root / license_rel)
+        count = cjk_count(text)
+        if count:
+            problems.append(
+                f"{license_rel}: purity: contains {count} CJK character(s) but "
+                "must be English-only"
+            )
+        lines = text.splitlines()
         expected = "Copyright (c) 2026 Chef's Pick OSS Starter contributors"
         found = lines[2] if len(lines) > 2 else ""
         if found != expected:
@@ -1024,8 +1364,6 @@ def check_c11(ctx: Context) -> list[str]:
                 f"{license_rel}: line 3 must be {expected!r}, found {found!r}"
             )
 
-    if checked == 0:
-        raise SkipCheck(f"no guidance file present (for example {home_rel})")
     return problems
 
 
@@ -1063,7 +1401,7 @@ def check_c12(ctx: Context) -> list[str]:
     summary_lines = _between(home_text, SUMMARY_START, SUMMARY_END)
     summary_rows = _table_rows(summary_lines) if summary_lines else []
     # The summary table's header row is not data.
-    summary_data = [r for r in summary_rows if r[0] != "模块 / Module"]
+    summary_data = [r for r in summary_rows if r[0] != "Module"]
     if not summary_data:
         raise SkipCheck(
             f"{GUIDANCE_FILE}: the summary table has no data rows yet "
@@ -1089,9 +1427,9 @@ def check_c12(ctx: Context) -> list[str]:
         problems.append(f"{GUIDANCE_FILE}: must link chefs-pick/SOURCES.md")
 
     # 1. The single "data verified" line.
-    match = re.search(r"数据核实日期 / Data verified:\s*(\d{4}-\d{2}-\d{2})", text)
+    match = re.search(r"Data verified:\s*(\d{4}-\d{2}-\d{2})", text)
     if not match:
-        problems.append(f"{sources_rel}: missing the '数据核实日期 / Data verified:' line")
+        problems.append(f"{sources_rel}: missing the 'Data verified:' line")
     else:
         check_date(match.group(1), f"{sources_rel}: data verified line")
 
@@ -1151,12 +1489,12 @@ def check_c12(ctx: Context) -> list[str]:
         sections[current] = "\n".join(buffer)
 
     evidence_types = [
-        "精确 Star 数 / Exact stars",
-        "四舍五入 Star 数 / Rounded stars",
-        "估算使用人数 / Estimated users",
-        "平台官方功能 / Official platform feature",
-        "事实标准 / De facto standard",
-        "未取得 / Not available",
+        "Exact stars",
+        "Rounded stars",
+        "Estimated users",
+        "Official platform feature",
+        "De facto standard",
+        "Not available",
     ]
 
     for index in range(1, 17):
@@ -1168,22 +1506,22 @@ def check_c12(ctx: Context) -> list[str]:
 
         fields = {}
         for row in _table_rows(section.splitlines()):
-            if len(row) >= 2 and row[0] != "字段 / Field":
+            if len(row) >= 2 and row[0] != "Field":
                 fields[row[0]] = row[1]
 
         for label in FIELD_LABELS:
             if label not in fields:
                 problems.append(f"{sources_rel}: {module} is missing the field: {label}")
 
-        level = fields.get("级别 / Level")
+        level = fields.get("Level")
         if level is not None and level not in LEVEL_VALUES:
             problems.append(f"{sources_rel}: {module} has an invalid level: {level}")
 
-        verified = fields.get("核实日期 / Verified")
+        verified = fields.get("Verified")
         if verified is not None:
             check_date(verified, f"{sources_rel}: {module} verified cell")
 
-        evidence = fields.get("认可度证据 / Evidence", "")
+        evidence = fields.get("Evidence", "")
         if evidence and not any(label in evidence for label in evidence_types):
             problems.append(
                 f"{sources_rel}: {module} evidence cell has no registered evidence type"
@@ -1196,7 +1534,9 @@ def check_c12(ctx: Context) -> list[str]:
                     f"{sources_rel}: {module}'s chosen source {repo} is archived"
                 )
 
-        for marker, label in (("**入选理由**", "入选理由"), ("**Rationale**", "Rationale")):
+        # Now that SOURCES.md is English-only there is a single "Rationale"
+        # paragraph per module (tooling-delta.md §4 C12), not a bilingual pair.
+        for marker, label in (("**Rationale**", "Rationale"),):
             if marker not in section:
                 problems.append(f"{sources_rel}: {module} has no {label} paragraph")
                 continue
@@ -1208,14 +1548,15 @@ def check_c12(ctx: Context) -> list[str]:
                     f"{sources_rel}: {module} has no non-empty {label} paragraph"
                 )
 
-        alt = section.split("**备选方案 / Alternatives**", 1)
+        alt = section.split("**Alternatives**", 1)
         if len(alt) < 2 or not re.search(r"^\s*[-*]\s+\S", alt[1], re.MULTILINE):
             problems.append(f"{sources_rel}: {module} needs at least one alternative")
 
-        rule = (fields.get("取舍规则 / Rule") or "").strip()
-        if rule == "2" and "认可度相当" not in section:
+        rule = (fields.get("Rule") or "").strip()
+        if rule == "2" and "comparable adoption" not in section:
             problems.append(
-                f"{sources_rel}: {module} uses rule 2, so its 入选理由 must state 认可度相当"
+                f"{sources_rel}: {module} uses rule 2, so its Rationale must state "
+                "comparable adoption"
             )
 
     # 5. The home page summary table: exactly 16 rows, M01..M16 in order.
@@ -1235,7 +1576,7 @@ def check_c12(ctx: Context) -> list[str]:
             check_date(row[3], f"{GUIDANCE_FILE}: summary row {expected}")
 
     # 6. The excluded-candidates section.
-    excluded_heading = "## 排除的候选 / Excluded candidates"
+    excluded_heading = "## Excluded candidates"
     if excluded_heading not in text:
         problems.append(f"{sources_rel}: missing the '{excluded_heading}' section")
     else:
@@ -1243,7 +1584,7 @@ def check_c12(ctx: Context) -> list[str]:
         rows = [
             r
             for r in _table_rows(body.splitlines())
-            if r[0] != "候选 / Candidate"
+            if r[0] != "Candidate"
         ]
         if len(rows) < 8:
             problems.append(
@@ -1262,6 +1603,7 @@ HREF_RE = re.compile(r'href="([^"]+)"')
 
 
 def _iter_links(text: str):
+    text = _strip_fenced_code(text)
     for match in LINK_RE.finditer(text):
         yield match.group(1)
     for match in HREF_RE.finditer(text):
@@ -1318,6 +1660,12 @@ def check_c13(ctx: Context) -> list[str]:
         guidance_file = copy / GUIDANCE_FILE
         if guidance_file.exists():
             guidance_file.unlink()
+        # language-structure.md §6, tooling-delta.md §4: the cleanup command
+        # also removes the home page's translation, which lives beside it
+        # outside GUIDANCE_DIR.
+        home_translation = copy / ".github/README.zh-CN.md"
+        if home_translation.exists():
+            home_translation.unlink()
         guidance_dir = copy / GUIDANCE_DIR
         if guidance_dir.exists():
             shutil.rmtree(guidance_dir)
@@ -1326,7 +1674,7 @@ def check_c13(ctx: Context) -> list[str]:
         found: set[str] = set()
         for rel in remaining:
             text = read_text(copy / rel)
-            for needle in ("chefs-pick/", ".github/README.md"):
+            for needle in ("chefs-pick/", ".github/README.md", ".github/README.zh-CN.md"):
                 if needle in text:
                     problems.append(f"after cleanup, {rel} still references {needle}")
             match = IDENTITY_RE.search(text)
@@ -1462,10 +1810,31 @@ def _english_headings(ctx, rel, wanted, what):
 
 
 def check_c18(ctx: Context) -> list[str]:
-    """MAINTAINING.md carries the six headings from guidance-layer §5."""
-    return _english_headings(
-        ctx, f"{GUIDANCE_DIR}/MAINTAINING.md", MAINTAINING_HEADINGS, "guidance-layer §5"
-    )
+    """MAINTAINING.md carries the six headings from guidance-layer §5.
+
+    Plus two assertions added by tooling-delta.md §4 C18: the ``## Release
+    gates`` section must spell out exactly 6 ordered-list items, and the
+    page must mention ``--update-digests`` (research.md R9).
+    """
+    rel = f"{GUIDANCE_DIR}/MAINTAINING.md"
+    problems = _english_headings(ctx, rel, MAINTAINING_HEADINGS, "guidance-layer §5")
+
+    path = ctx.template_dir / rel
+    if path.is_file():
+        text = read_text(path)
+        if "--update-digests" not in text:
+            problems.append(f"{rel}: must mention --update-digests")
+
+        gates_heading = "## Release gates"
+        if gates_heading in text:
+            body = text.split(gates_heading, 1)[1].split("\n## ", 1)[0]
+            gate_items = re.findall(r"^\d+\.\s", body, re.MULTILINE)
+            if len(gate_items) != 6:
+                problems.append(
+                    f"{rel}: the '{gates_heading}' section must have exactly 6 "
+                    f"ordered-list items, found {len(gate_items)}"
+                )
+    return problems
 
 
 def check_c19(ctx: Context) -> list[str]:
@@ -1580,6 +1949,232 @@ def check_c22(ctx: Context) -> list[str]:
     return problems
 
 
+def check_c23(ctx: Context) -> list[str]:
+    """The verbatim 001 contract's star counts agree with ``template/``.
+
+    tooling-delta.md §5 C23: paths are resolved relative to the repository
+    root (the script's own parent directory's parent), never to
+    ``--template-dir``, so this check always looks at the real contract and
+    the real template regardless of ``ctx.template_dir``.
+
+    Every ``★ N (owner/repo)`` occurrence is kept, on both sides, as its own
+    ``(file, value)`` pair rather than collapsed into one dict entry per
+    repository -- collapsing would let a later file silently overwrite an
+    earlier file's drifted value and hide it from the comparison. Each
+    template occurrence is compared against the contract's value for that
+    repository, and every disagreement is reported individually. A
+    repository that itself carries more than one distinct value -- within
+    the contract, or within ``template/`` -- is also reported, as an
+    internal self-contradiction, independent of any cross-side comparison.
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    contract_path = (
+        repo_root / "specs/001-chefs-pick-starter/contracts/guidance-layer.md"
+    )
+    if not contract_path.is_file():
+        raise SkipCheck(f"missing {contract_path}")
+
+    contract_rel = "specs/001-chefs-pick-starter/contracts/guidance-layer.md"
+    contract_stars: dict[str, list[tuple[str, str]]] = {}
+    for stars, repo in STAR_RE.findall(read_text(contract_path)):
+        contract_stars.setdefault(repo, []).append(
+            (contract_rel, stars.replace(",", ""))
+        )
+
+    template_stars: dict[str, list[tuple[str, str]]] = {}
+    template_root = repo_root / "template"
+    if template_root.is_dir():
+        for rel in iter_files(template_root):
+            if not rel.endswith(".md"):
+                continue
+            for stars, repo in STAR_RE.findall(read_text(template_root / rel)):
+                template_stars.setdefault(repo, []).append(
+                    (rel, stars.replace(",", ""))
+                )
+
+    cross_problems: list[tuple[str, str, str]] = []
+    for repo in sorted(set(contract_stars) & set(template_stars)):
+        contract_occurrences = sorted(contract_stars[repo])
+        # When the contract itself disagrees with itself, point 3 below
+        # reports that self-contradiction; use its first (sorted) value as
+        # "the" contract value here so every template occurrence still gets
+        # compared against something concrete.
+        contract_value = contract_occurrences[0][1]
+        for rel, value in sorted(template_stars[repo]):
+            if value != contract_value:
+                cross_problems.append(
+                    (
+                        repo,
+                        rel,
+                        f"{rel}: {repo} has {value}, contract has {contract_value}",
+                    )
+                )
+
+    self_problems: list[tuple[str, str, str]] = []
+    for repo in sorted(set(contract_stars) | set(template_stars)):
+        for occurrences in (
+            contract_stars.get(repo, []),
+            template_stars.get(repo, []),
+        ):
+            distinct = sorted(set(occurrences))
+            for i in range(len(distinct)):
+                for j in range(i + 1, len(distinct)):
+                    rel_a, value_a = distinct[i]
+                    rel_b, value_b = distinct[j]
+                    if value_a != value_b:
+                        self_problems.append(
+                            (
+                                repo,
+                                rel_a,
+                                f"{repo}: {rel_a} has {value_a}, "
+                                f"{rel_b} has {value_b}",
+                            )
+                        )
+
+    problems = [text for _repo, _rel, text in sorted(cross_problems)]
+    problems += [text for _repo, _rel, text in sorted(self_problems)]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for text in problems:
+        if text not in seen:
+            seen.add(text)
+            deduped.append(text)
+    return deduped
+
+
+def check_c24(ctx: Context) -> list[str]:
+    """Every translation's source marker matches its current English source.
+
+    tooling-delta.md §5 C24: a stale-but-well-formed digest is a WARN
+    (a FAIL under ``--release``); a missing marker, a malformed marker, or
+    a marker naming a source file that does not exist is always a FAIL,
+    since those are structural problems, not freshness problems.
+    """
+    root = ctx.template_dir
+    translations = find_translations(root)
+    if not translations:
+        raise SkipCheck("no translation is present")
+
+    problems: list[str] = []
+    stale: list[str] = []
+    for translation_rel, source_rel in sorted(translations.items()):
+        if not (selected(ctx, translation_rel) or selected(ctx, source_rel)):
+            continue
+        source_name = Path(source_rel).name
+        text = read_text(root / translation_rel)
+
+        digest_matches = []
+        for line in text.splitlines():
+            match = DIGEST_RE.match(line)
+            if match and match.group(1) == source_name:
+                digest_matches.append(match)
+
+        if not digest_matches:
+            problems.append(
+                f"{translation_rel}: missing or malformed source marker for "
+                f"{source_name} (expected exactly one line "
+                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
+            )
+            continue
+
+        if len(digest_matches) > 1:
+            problems.append(
+                f"{translation_rel}: found {len(digest_matches)} source "
+                f"marker lines for {source_name} (expected exactly one line "
+                f"'<!-- translation-of: {source_name} sha256:<16 hex> -->')"
+            )
+            continue
+
+        digest_match = digest_matches[0]
+
+        source_path = root / source_rel
+        if not source_path.is_file():
+            problems.append(
+                f"{translation_rel}: source marker names a file that does not "
+                f"exist: {source_rel}"
+            )
+            continue
+
+        recorded_digest = digest_match.group(2)
+        actual_digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
+        if recorded_digest != actual_digest:
+            stale.append(
+                f"{translation_rel}: source marker is stale for {source_rel} "
+                f"(recorded {recorded_digest}, current {actual_digest}); run "
+                "python3 tools/check_template.py --update-digests"
+            )
+
+    if problems:
+        return problems + stale
+    if stale:
+        if ctx.release:
+            return stale
+        raise WarnCheck(stale)
+    return []
+
+
+def update_digests(template_dir: Path) -> None:
+    """Refresh every translation's source-marker digest in place.
+
+    Only the ``<!-- translation-of: ... sha256:... -->`` line is rewritten;
+    every other byte of the file is left untouched
+    (tooling-delta.md §1.2).
+    """
+    any_updated = False
+    for translation_rel, source_rel in sorted(find_translations(template_dir).items()):
+        source_path = template_dir / source_rel
+        if not source_path.is_file():
+            # find_translations() registers a translation by filename
+            # convention alone (tooling-delta.md §1.3); a missing source is
+            # a C24 FAIL to be reported by check_template.py, not something
+            # --update-digests can compute a digest for. Skip it here.
+            print(
+                f"{translation_rel}: skipped (source not found: {source_rel})"
+            )
+            continue
+        digest = hashlib.sha256(source_path.read_bytes()).hexdigest()[:16]
+        source_name = Path(source_rel).name
+
+        translation_path = template_dir / translation_rel
+        text = translation_path.read_bytes().decode("utf-8")
+
+        # Match the marker line's text only, without consuming the line
+        # ending -- a lookahead for an optional trailing "\r" (before the
+        # "\n" that (?m) $ matches against) means the substitution below
+        # never touches a line-ending byte, whatever it is (tooling-delta.md
+        # §1.2). Using a regex over the whole decoded text, rather than
+        # splitting on a single detected newline, also means a file mixing
+        # CRLF and LF still has every one of its marker lines found.
+        marker_re = re.compile(
+            r"(?m)^<!-- translation-of: "
+            + re.escape(source_name)
+            + r" sha256:([0-9a-f]{16}) -->(?=\r?$)"
+        )
+        matches = list(marker_re.finditer(text))
+
+        if not matches:
+            continue
+
+        if len(matches) > 1:
+            print(
+                f"{translation_rel}: skipped (found {len(matches)} source "
+                f"marker lines for {source_name}; expected exactly one)"
+            )
+            continue
+
+        match = matches[0]
+        old_digest = match.group(1)
+        if old_digest != digest:
+            new_line = f"<!-- translation-of: {source_name} sha256:{digest} -->"
+            new_text = text[: match.start()] + new_line + text[match.end() :]
+            translation_path.write_bytes(new_text.encode("utf-8"))
+            print(f"{translation_rel}: {old_digest} -> {digest}")
+            any_updated = True
+
+    if not any_updated:
+        print("No digest needed updating.")
+
+
 CHECKS = {
     "C01": ("Layout", lambda ctx: check_c01(ctx)),
     "C02": ("No development files", lambda ctx: check_c02(ctx)),
@@ -1591,7 +2186,7 @@ CHECKS = {
     "C08": ("Placeholders", lambda ctx: check_c08(ctx)),
     "C09": ("Source comments", lambda ctx: check_c09(ctx)),
     "C10": ("Template identity isolation", lambda ctx: check_c10(ctx)),
-    "C11": ("Guidance layer", lambda ctx: check_c11(ctx)),
+    "C11": ("Language structure", lambda ctx: check_c11(ctx)),
     "C12": ("Selection list", lambda ctx: check_c12(ctx)),
     "C13": ("Cleanup simulation", lambda ctx: check_c13(ctx)),
     "C14": ("Relative links", lambda ctx: check_c14(ctx)),
@@ -1603,6 +2198,8 @@ CHECKS = {
     "C20": ("Contributor documents", lambda ctx: check_c20(ctx)),
     "C21": ("Text format", lambda ctx: check_c21(ctx)),
     "C22": ("Removal simulation", lambda ctx: check_c22(ctx)),
+    "C23": ("Contract parity", lambda ctx: check_c23(ctx)),
+    "C24": ("Translation freshness", lambda ctx: check_c24(ctx)),
 }
 
 
@@ -1620,6 +2217,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--today", default=None)
     parser.add_argument("--only", default=None)
     parser.add_argument("--files", default=None)
+    parser.add_argument("--update-digests", action="store_true")
     return parser
 
 
@@ -1634,6 +2232,10 @@ def main(argv: list[str] | None = None) -> int:
     if not template_dir.is_dir():
         print(f"error: template directory not found: {template_dir}", file=sys.stderr)
         return 2
+
+    if args.update_digests:
+        update_digests(template_dir)
+        return 0
 
     if args.today is None:
         today = _dt.date.today()
@@ -1661,7 +2263,7 @@ def main(argv: list[str] | None = None) -> int:
         template_dir=template_dir, release=args.release, today=today, files=files
     )
 
-    passed = failed = skipped = 0
+    passed = failed = warned = skipped = 0
     for cid in ids:
         title, func = CHECKS[cid]
         try:
@@ -1669,6 +2271,20 @@ def main(argv: list[str] | None = None) -> int:
         except SkipCheck as exc:
             print(f"SKIP {cid} {title}: {exc}")
             skipped += 1
+            continue
+        except WarnCheck as exc:
+            problems = exc.args[0]
+            # --release promotes a WARN to a FAIL (tooling-delta.md §1.1).
+            if ctx.release:
+                print(f"FAIL {cid} {title}")
+                for problem in problems:
+                    print(f"  - {problem}")
+                failed += 1
+            else:
+                print(f"WARN {cid} {title}")
+                for problem in problems:
+                    print(f"  - {problem}")
+                warned += 1
             continue
         if problems:
             print(f"FAIL {cid} {title}")
@@ -1679,7 +2295,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"PASS {cid} {title}")
             passed += 1
 
-    print(f"Summary: {passed} passed, {failed} failed, {skipped} skipped")
+    print(f"Summary: {passed} passed, {failed} failed, {warned} warned, {skipped} skipped")
     return 1 if failed else 0
 
 

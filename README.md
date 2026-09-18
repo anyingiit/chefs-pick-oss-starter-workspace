@@ -21,7 +21,7 @@ here; the template repository carries only the contents of `template/`.
 ## 常用命令 / Common commands
 
 ```bash
-python3 tools/check_template.py              # 22 项结构校验 / 22 structural checks
+python3 tools/check_template.py              # 24 项结构校验 / 24 structural checks
 python3 tools/check_template.py --release    # 发布门禁（核实日期收紧到 30 天）
 python3 -m unittest discover -s tools/tests  # 单元测试 / unit tests
 python3 tools/verify_sources.py              # 只读复核认可度数据 / dry-run refresh

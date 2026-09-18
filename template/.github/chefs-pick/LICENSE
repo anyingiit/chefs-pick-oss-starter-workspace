@@ -23,5 +23,3 @@ SOFTWARE.
 ---
 
 Note: Projects generated from the Chef's Pick OSS Starter template are not required to retain this copyright and permission notice. You may replace the copyright holder in your project's LICENSE or choose a different license. Upstream content keeps its own license: CODE_OF_CONDUCT.md is Contributor Covenant 2.1 (CC BY 4.0) and must keep its Attribution section.
-
-说明：由 Chef's Pick OSS Starter 模板生成的项目无需保留本版权和许可声明，可以替换项目 LICENSE 中的版权人，也可以改用其他许可证。上游内容仍适用其原有许可证：CODE_OF_CONDUCT.md 为 Contributor Covenant 2.1（CC BY 4.0），须保留其 Attribution 段落。
