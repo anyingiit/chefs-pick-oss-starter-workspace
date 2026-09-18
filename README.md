@@ -62,15 +62,22 @@ on top of what is already there:
 ```bash
 # Subsequent publish: replace the content inside a clone, add one commit
 git -C <clone-path> fetch origin main
-git -C <clone-path> checkout main
+git -C <clone-path> checkout -B main origin/main
+git -C <clone-path> rm -rqf .
 cp -a template/. <clone-path>/
 git -C <clone-path> add -A
+diff -r --exclude=.git <clone-path> template
 git -C <clone-path> commit -m "docs: sync template content"
 git -C <clone-path> push origin main
 ```
 
-After the copy and before the commit, the clone's working tree should be byte-identical to
-`template/`; `diff -r --exclude=.git <clone-path> template` is the way to confirm it.
+Two of those steps are easy to leave out and both cause real damage. `checkout -B main origin/main`
+resets the clone to the published branch, so a clone that is behind cannot build its commit on
+stale history and a clone carrying unrelated local commits cannot push them into the template
+repository. `git rm -rqf .` empties the working tree first, so a file deleted from `template/`
+actually disappears from the publication instead of lingering, and a path that changed between a
+file and a directory does not make the copy fail. The `diff` line is the checkpoint: it must print
+nothing before you commit.
 
 Three things to know, because getting them wrong damages the published repository:
 

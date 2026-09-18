@@ -5,7 +5,7 @@
 
 > 英文版是规范版本。本页与 [README.md](README.md) 不一致时，以英文版为准。
 
-<!-- translation-of: README.md sha256:b46563346c02a932 -->
+<!-- translation-of: README.md sha256:3c8fad18130c118e -->
 
 这是 [chefs-pick-oss-starter](https://github.com/anyingiit/chefs-pick-oss-starter)
 模板仓库的开发与维护工作区：规格、选型调研、校验工具都在这里，模板仓库只承载 `template/` 的内容。
@@ -59,15 +59,19 @@ git push <模板仓库远程名> publish:main
 ```bash
 # 后续发布：在模板仓库的克隆里替换内容，追加一个提交
 git -C <克隆路径> fetch origin main
-git -C <克隆路径> checkout main
+git -C <克隆路径> checkout -B main origin/main
+git -C <克隆路径> rm -rqf .
 cp -a template/. <克隆路径>/
 git -C <克隆路径> add -A
+diff -r --exclude=.git <克隆路径> template
 git -C <克隆路径> commit -m "docs: sync template content"
 git -C <克隆路径> push origin main
 ```
 
-复制完、提交前，克隆的工作树应当与 `template/` 逐字节相同，可用
-`diff -r --exclude=.git <克隆路径> template` 当场核对。
+其中两步最容易被省掉，而省掉任何一步都会造成真实的损坏。`checkout -B main origin/main` 把克隆重置到
+已发布的分支，这样落后的克隆不会把提交建在陈旧历史上，带着无关本地提交的克隆也不会把它们推进模板仓库。
+`git rm -rqf .` 先清空工作树，于是从 `template/` 删掉的文件在发布内容中真的消失，而不是残留下来；
+某个路径在文件与目录之间变更时，复制也不会失败。`diff` 那一行是检查点：提交前它必须没有任何输出。
 
 有三件事必须知道，弄错会损坏已发布的仓库：
 

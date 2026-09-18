@@ -74,9 +74,11 @@ license
 
 ```bash
 git -C <clone-path> fetch origin main
-git -C <clone-path> checkout main
+git -C <clone-path> checkout -B main origin/main
+git -C <clone-path> rm -rqf .
 cp -a template/. <clone-path>/
 git -C <clone-path> add -A
+diff -r --exclude=.git <clone-path> template
 git -C <clone-path> commit -m "docs: sync template content"
 git -C <clone-path> push origin main
 ```
@@ -159,15 +161,22 @@ on top of what is already there:
 ```bash
 # Subsequent publish: replace the content inside a clone, add one commit
 git -C <clone-path> fetch origin main
-git -C <clone-path> checkout main
+git -C <clone-path> checkout -B main origin/main
+git -C <clone-path> rm -rqf .
 cp -a template/. <clone-path>/
 git -C <clone-path> add -A
+diff -r --exclude=.git <clone-path> template
 git -C <clone-path> commit -m "docs: sync template content"
 git -C <clone-path> push origin main
 ```
 
-After the copy and before the commit, the clone's working tree should be byte-identical to
-`template/`; `diff -r --exclude=.git <clone-path> template` is the way to confirm it.
+Two of those steps are easy to leave out and both cause real damage. `checkout -B main origin/main`
+resets the clone to the published branch, so a clone that is behind cannot build its commit on
+stale history and a clone carrying unrelated local commits cannot push them into the template
+repository. `git rm -rqf .` empties the working tree first, so a file deleted from `template/`
+actually disappears from the publication instead of lingering, and a path that changed between a
+file and a directory does not make the copy fail. The `diff` line is the checkpoint: it must print
+nothing before you commit.
 
 Three things to know, because getting them wrong damages the published repository:
 
@@ -255,15 +264,19 @@ git push <模板仓库远程名> publish:main
 ```bash
 # 后续发布：在模板仓库的克隆里替换内容，追加一个提交
 git -C <克隆路径> fetch origin main
-git -C <克隆路径> checkout main
+git -C <克隆路径> checkout -B main origin/main
+git -C <克隆路径> rm -rqf .
 cp -a template/. <克隆路径>/
 git -C <克隆路径> add -A
+diff -r --exclude=.git <克隆路径> template
 git -C <克隆路径> commit -m "docs: sync template content"
 git -C <克隆路径> push origin main
 ```
 
-复制完、提交前，克隆的工作树应当与 `template/` 逐字节相同，可用
-`diff -r --exclude=.git <克隆路径> template` 当场核对。
+其中两步最容易被省掉，而省掉任何一步都会造成真实的损坏。`checkout -B main origin/main` 把克隆重置到
+已发布的分支，这样落后的克隆不会把提交建在陈旧历史上，带着无关本地提交的克隆也不会把它们推进模板仓库。
+`git rm -rqf .` 先清空工作树，于是从 `template/` 删掉的文件在发布内容中真的消失，而不是残留下来；
+某个路径在文件与目录之间变更时，复制也不会失败。`diff` 那一行是检查点：提交前它必须没有任何输出。
 
 有三件事必须知道，弄错会损坏已发布的仓库：
 
