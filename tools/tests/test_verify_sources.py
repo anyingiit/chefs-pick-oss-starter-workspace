@@ -481,5 +481,82 @@ class GhReadyTests(unittest.TestCase):
         which.assert_called_once_with("gh")
 
 
+class ReplaceStarRefsTests(unittest.TestCase):
+    """T019: verbatim-contract writing (tooling-delta.md §6) -- ``replace_star_refs``."""
+
+    def test_replaces_a_known_repos_star_count(self) -> None:
+        text = "Before ★ 8,882 (actions/checkout) after."
+        result = vs.replace_star_refs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(result, "Before ★ 9,000 (actions/checkout) after.")
+
+    def test_leaves_an_unlisted_repo_untouched(self) -> None:
+        # guidance-layer.md §0's own worked example uses the literal
+        # "owner/repo" slug, which is not a real repository and never
+        # appears in stars_by_repo -- it must survive verbatim.
+        text = "§0 example: ★ 123 (owner/repo) illustrates the format."
+        result = vs.replace_star_refs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(result, text)
+
+    def test_replaces_every_occurrence_of_the_same_repo(self) -> None:
+        text = (
+            "First: ★ 1 (foo/bar). "
+            "Second: ★ 1 (foo/bar). "
+            "Third: ★ 1 (foo/bar)."
+        )
+        result = vs.replace_star_refs(text, {"foo/bar": "2"})
+        self.assertEqual(result.count("★ 2 (foo/bar)"), 3)
+        self.assertNotIn("★ 1 (foo/bar)", result)
+
+
+class ContractStarDiffsTests(unittest.TestCase):
+    """T019: verbatim-contract drift reporting -- ``contract_star_diffs``."""
+
+    def test_reports_a_repo_whose_star_count_changed(self) -> None:
+        text = "★ 8,882 (actions/checkout) and, separately, ★ 42 (owner/repo)."
+        diffs = vs.contract_star_diffs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(diffs, [("actions/checkout", "8,882", "9,000")])
+
+    def test_empty_when_the_contract_already_matches(self) -> None:
+        text = "★ 9,000 (actions/checkout)"
+        diffs = vs.contract_star_diffs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(diffs, [])
+
+    def test_a_repo_absent_from_stars_by_repo_produces_no_diff(self) -> None:
+        # Same rule as replace_star_refs: an unmatched repo (e.g. the §0
+        # example) is not reported as drift, since it is never rewritten.
+        text = "★ 42 (owner/repo)"
+        diffs = vs.contract_star_diffs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(diffs, [])
+
+
+class MissingContractFileTests(TempTemplateCase):
+    """T019: tooling-delta.md §6 -- a missing verbatim contract is not an error.
+
+    ``main()`` decides whether the contract exists inline (it is not split
+    into a separate helper), so the finest-grained test available is at the
+    ``main()`` level: point ``repo_root()`` at a directory that has no
+    ``specs/001-chefs-pick-starter/contracts/guidance-layer.md`` and confirm
+    the run still succeeds and reports the file as skipped rather than
+    erroring.
+    """
+
+    def test_main_succeeds_and_notes_the_skip_when_the_contract_is_absent(self) -> None:
+        write_template(self.root)
+        fetched = {
+            "othneildrew/Best-README-Template": payload(
+                "othneildrew/Best-README-Template", stars=16_500
+            ),
+            "github/gitignore": payload("github/gitignore", stars=176_000),
+        }
+        with mock.patch.object(
+            vs, "repo_root", return_value=self.root
+        ), mock.patch.object(vs, "gh_ready", return_value=True), mock.patch.object(
+            vs, "fetch_repo", side_effect=lambda slug: fetched[slug]
+        ):
+            code, output = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertIn("note: contract file not found, skipped:", output)
+
+
 if __name__ == "__main__":
     unittest.main()
