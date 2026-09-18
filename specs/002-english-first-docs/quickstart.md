@@ -98,7 +98,7 @@ V7 ~ V9 会改动工作区，做完后用 `git checkout -- template/` 还原。
 |---|---|---|
 | R1 | `git diff --stat template/ -- ':!*.github/README*' ':!*chefs-pick*'` | 无输出——交付给使用者的项目文件一个字节都没动（FR-009） |
 | R2 | `python3 tools/check_template.py --only C15` | PASS——MIT 正文未被改动 |
-| R3 | `grep -c '★' template/.github/chefs-pick/SOURCES.md` | 与改造前相同——认可度数字只改契约那一侧，模板侧不动 |
+| R3 | `grep -o '★ [0-9,]* ([^)]*)' template/.github/chefs-pick/SOURCES.md \| sort -u \| wc -l` | `34`——认可度数字只改契约那一侧，模板侧一个都不动。数的是**去重后的认可度数据条目**（数值＋仓库名），不是 `★` 字符出现的次数：改造前 SOURCES.md 有一段入选理由中英并排，同一个 `★ 22,527 (renovatebot/renovate)` 在两个语言半边各出现一次，删掉中文半边后 `★` 字符总数会从 39 掉到 38，但数据一条没少 |
 | R4 | `git ls-files template/ \| wc -l` | `28`（改造前 26，新增两份译本） |
 
 ## D. 验收对照表
