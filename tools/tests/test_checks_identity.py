@@ -1,8 +1,13 @@
-"""Tests for C10 (template identity isolation) and C11 (guidance layer).
+"""Tests for C10 (template identity isolation) and C11 (language structure).
 
 Contract: ``specs/001-chefs-pick-starter/contracts/tooling.md`` §1.3,
 ``template-layout.md`` §3 §4, ``guidance-layer.md`` §0 §1 §2 §3 §7 §8,
 ``project-files.md`` M09, M15, M16.
+
+C11 was rewritten wholesale by
+``specs/002-english-first-docs/contracts/tooling-delta.md`` §4 (title
+changed from "Guidance layer" to "Language structure"); its fixtures and
+test cases below follow that contract's §4 C11 entry and §8.2.
 """
 
 from __future__ import annotations
@@ -66,116 +71,171 @@ def clean_project_tree() -> dict[str, str]:
 
 
 # --------------------------------------------------------------------------
-# Guidance-layer fixtures (C11): bilingual headings, template identity allowed.
+# Guidance-layer fixtures (C11): English originals + Chinese translations,
+# each satisfying every one of the ten language-structure assertions
+# (tooling-delta.md §4 C11). Built from ``ANCHOR_SEQUENCES`` rather than
+# hard-coded headings, so a contract change to the sequence breaks loudly
+# here instead of silently drifting.
 # --------------------------------------------------------------------------
 
-GUIDE_EXTRA_BILINGUAL = [
-    ("按语言补充", "Adding language-specific rules"),
-    ("固定动作版本", "Pinning actions"),
-    ("账号级默认文件", "Account-level default files"),
-    ("中文译本", "Chinese translations"),
-    ("模板版本追溯", "Tracing the template version"),
-    ("更换许可证", "Changing the license"),
-]
+README_SEQ = ct.ANCHOR_SEQUENCES["README"]
+SETUP_SEQ = ct.ANCHOR_SEQUENCES["SETUP"]
+
+# id -> (heading level, English text, Chinese text) for every non-H1 anchor
+# in the README sequence.
+README_HEADINGS = {
+    "what-you-get": (2, "What you get", "你会得到什么"),
+    "required": (3, "Required", "必需"),
+    "recommended": (3, "Recommended", "推荐"),
+    "optional": (3, "Optional", "可选"),
+    "the-picks-at-a-glance": (2, "The picks at a glance", "选型概览"),
+    "how-we-pick": (2, "How we pick", "如何选型"),
+    "quick-start": (2, "Quick start", "快速开始"),
+    "good-to-know": (2, "Good to know", "须知事项"),
+    "clean-up-when-done": (2, "Clean up when done", "完成后清理"),
+    "feedback-and-contact": (2, "Feedback and contact", "反馈与联系"),
+    "license": (2, "License", "许可证"),
+}
+SETUP_HEADINGS = {
+    "placeholders": (2, "Placeholders", "占位符"),
+    "steps": (2, "Steps", "步骤"),
+}
 
 
-def guidance_home(title: str | None = None) -> str:
-    """``.github/README.md`` satisfying every C11 requirement for the home page."""
-    if title is None:
-        title = ct.GUIDANCE_HOME_TITLE
-    return (
-        f"{title}\n"
-        "\n"
-        "每个模块都选用社区公认的佼佼者。\n"
-        "\n"
-        "Every module uses a widely adopted community pick.\n"
-        "\n"
-        "## 快速开始 / Quick start\n"
-        "\n"
-        "1. 按 [起步清单 / Setup checklist](chefs-pick/SETUP.md) 完成定制。\n"
-        "2. 查阅 [模块讲解 / Module guide](chefs-pick/GUIDE.md)。\n"
-        "\n"
-        "## 完成后清理 / Clean up when done\n"
-        "\n"
-        "```bash\n"
-        f"{ct.CLEANUP_COMMAND}\n"
-        'git commit -m "chore: remove template guide"\n'
-        "```\n"
-        "\n"
-        "## 反馈与联系 / Feedback and contact\n"
-        "\n"
-        "请在本仓库提 Issue。 / Please open an issue in this repository.\n"
-    )
+def _anchor_block(anchor_id: str, level: int, heading: str, body: str) -> str:
+    return f"<!-- anchor: {anchor_id} -->\n{'#' * level} {heading}\n\n{body}\n\n"
+
+
+def guidance_home() -> str:
+    """``.github/README.md``: English original, satisfying every C11 rule."""
+    out = [
+        f"<!-- anchor: {README_SEQ[0]} -->\n{ct.GUIDANCE_HOME_TITLE}\n\n",
+        "**English** · [简体中文](README.zh-CN.md)\n\n",
+        "This template gives your project a full set of starter files.\n\n",
+    ]
+    for anchor_id in README_SEQ[1:]:
+        level, english, _chinese = README_HEADINGS[anchor_id]
+        if anchor_id == "quick-start":
+            body = (
+                "1. Follow the [Setup checklist](chefs-pick/SETUP.md).\n"
+                "2. Review the [Module guide](chefs-pick/GUIDE.md)."
+            )
+        elif anchor_id == "clean-up-when-done":
+            body = (
+                "```bash\n"
+                f"{ct.CLEANUP_COMMAND}\n"
+                'git commit -m "chore: remove template guide"\n'
+                "```"
+            )
+        elif anchor_id == "feedback-and-contact":
+            body = "Please open an issue in this repository."
+        else:
+            body = "Some plain English explanatory text."
+        out.append(_anchor_block(anchor_id, level, english, body))
+    return "".join(out)
+
+
+def guidance_home_zh() -> str:
+    """``.github/README.zh-CN.md``: the Chinese translation of the home page."""
+    source_name = "README.md"
+    notice = f"> 英文版是规范版本。本页与 [{source_name}]({source_name}) 不一致时，以英文版为准。"
+    out = [
+        f"<!-- anchor: {README_SEQ[0]} -->\n# 主厨精选开源起步模板\n\n",
+        "[English](README.md) · **简体中文**\n\n",
+        f"{notice}\n\n",
+        "本模板为项目提供完整的起步文件。\n\n",
+    ]
+    for anchor_id in README_SEQ[1:]:
+        level, _english, chinese = README_HEADINGS[anchor_id]
+        out.append(_anchor_block(anchor_id, level, chinese, "相关说明文字。"))
+    return "".join(out)
 
 
 def guidance_setup() -> str:
-    """``SETUP.md`` with S01-S09 and the verbatim placeholder table header."""
-    steps = "\n".join(
-        f"| S0{n} | 必做 / Required | 第 {n} 步 / Step {n} | 确认 / Verify {n} |"
-        for n in range(1, 10)
-    )
-    return (
-        "# 起步清单 / Setup checklist\n"
-        "\n"
-        "按顺序完成，大约 15 分钟。 / Work through it in order, about 15 minutes.\n"
-        "\n"
-        "## 占位符 / Placeholders\n"
-        "\n"
-        f"{ct.PLACEHOLDER_TABLE_HEADER}\n"
-        "|---|---|---|---|\n"
-        "| `CHANGEME_OWNER` | 账号 / Owner | `README.md` | `octocat` |\n"
-        "\n"
-        "## 步骤 / Steps\n"
-        "\n"
-        "| 编号 / ID | 类型 / Kind | 步骤 / Step | 如何确认 / How to verify |\n"
-        "|---|---|---|---|\n"
-        f"{steps}\n"
-    )
-
-
-def guidance_guide(skip: tuple[str, ...] = ()) -> str:
-    """``GUIDE.md`` with ``## M01``-``## M16`` plus the 6 extra headings."""
-    parts = [
-        "# 模块讲解 / Module guide\n",
-        "\n",
-        "本页逐个讲解模块。 / This page walks through each module.\n",
+    """``chefs-pick/SETUP.md``: English original."""
+    out = [
+        f"<!-- anchor: {SETUP_SEQ[0]} -->\n# Setup checklist\n\n",
+        "**English** · [简体中文](SETUP.zh-CN.md)\n\n",
+        "Work through this list in order.\n\n",
     ]
-    for n in range(1, 17):
-        module = f"M{n:02d}"
-        if module in skip:
-            continue
-        parts.append(
-            f"\n## {module} 模块 / Module {module}\n"
-            "\n"
-            "### 为什么需要 / Why\n"
-            "\n"
-            "说明。 / Notes.\n"
-            "\n"
-            "### 如何定制 / Customize\n"
-            "\n"
-            "说明。 / Notes.\n"
-            "\n"
-            "### 如何删除 / Remove\n"
-            "\n"
-            "说明。 / Notes.\n"
-        )
-    for chinese, english in GUIDE_EXTRA_BILINGUAL:
-        parts.append(f"\n## {chinese} / {english}\n\n说明。 / Notes.\n")
-    return "".join(parts)
+    for anchor_id in SETUP_SEQ[1:]:
+        level, english, _chinese = SETUP_HEADINGS[anchor_id]
+        out.append(_anchor_block(anchor_id, level, english, "Some plain English explanatory text."))
+    return "".join(out)
+
+
+def guidance_setup_zh() -> str:
+    """``chefs-pick/SETUP.zh-CN.md``: the Chinese translation."""
+    source_name = "SETUP.md"
+    notice = f"> 英文版是规范版本。本页与 [{source_name}]({source_name}) 不一致时，以英文版为准。"
+    out = [
+        f"<!-- anchor: {SETUP_SEQ[0]} -->\n# 起步清单\n\n",
+        "[English](SETUP.md) · **简体中文**\n\n",
+        f"{notice}\n\n",
+    ]
+    for anchor_id in SETUP_SEQ[1:]:
+        level, _english, chinese = SETUP_HEADINGS[anchor_id]
+        out.append(_anchor_block(anchor_id, level, chinese, "相关说明文字。"))
+    return "".join(out)
+
+
+def guidance_guide() -> str:
+    """``chefs-pick/GUIDE.md``: not a translation, so no selector or anchors.
+
+    Includes the "Translating your own README" fenced-code demonstration
+    (tooling-delta.md §8.2): the language-selector lines it shows verbatim
+    are example text inside a fenced code block, not this document's own
+    language entry, so C11 must not flag them.
+    """
+    return (
+        "# Module guide\n\n"
+        "This page walks through each module in plain English prose.\n\n"
+        "## Translating your own README\n\n"
+        "You can copy these two lines directly into your own files.\n\n"
+        "In `README.md`:\n\n"
+        "```markdown\n"
+        "**English** · [简体中文](README.zh-CN.md)\n"
+        "```\n\n"
+        "In `README.zh-CN.md`:\n\n"
+        "```markdown\n"
+        "[English](README.md) · **简体中文**\n"
+        "```\n"
+    )
+
+
+def guidance_guide_tilde() -> str:
+    """Same as ``guidance_guide()``, but fenced with ``~~~`` instead of
+
+    ```` ``` ````. tooling-delta.md §8.2's fenced-code exemption applies to
+    either fence character (research.md R6), so this must pass exactly
+    like ``guidance_guide()`` does.
+    """
+    return (
+        "# Module guide\n\n"
+        "This page walks through each module in plain English prose.\n\n"
+        "## Translating your own README\n\n"
+        "You can copy these two lines directly into your own files.\n\n"
+        "In `README.md`:\n\n"
+        "~~~markdown\n"
+        "**English** · [简体中文](README.zh-CN.md)\n"
+        "~~~\n\n"
+        "In `README.zh-CN.md`:\n\n"
+        "~~~markdown\n"
+        "[English](README.md) · **简体中文**\n"
+        "~~~\n"
+    )
 
 
 GUIDANCE_CHANGELOG = (
-    "# 模板变更记录 / Template changelog\n"
-    "\n"
-    "本文件记录模板自身的变更。\n"
+    "# Template changelog\n"
     "\n"
     "This file records changes to the template itself.\n"
     "\n"
-    "## [Unreleased] / 未发布\n"
+    "## [Unreleased]\n"
     "\n"
-    "### Added / 新增\n"
+    "### Added\n"
     "\n"
-    "- 首个版本。 / First version.\n"
+    "- First version.\n"
 )
 
 GUIDANCE_LICENSE = (
@@ -191,7 +251,9 @@ GUIDANCE_LICENSE = (
 def full_guidance_tree() -> dict[str, str]:
     return {
         ".github/README.md": guidance_home(),
+        ".github/README.zh-CN.md": guidance_home_zh(),
         ".github/chefs-pick/SETUP.md": guidance_setup(),
+        ".github/chefs-pick/SETUP.zh-CN.md": guidance_setup_zh(),
         ".github/chefs-pick/GUIDE.md": guidance_guide(),
         ".github/chefs-pick/CHANGELOG.md": GUIDANCE_CHANGELOG,
         ".github/chefs-pick/LICENSE": GUIDANCE_LICENSE,
@@ -295,26 +357,186 @@ class TestC10TemplateIdentityIsolation(CheckTestCase):
 
 
 # --------------------------------------------------------------------------
-# C11 Guidance layer
+# C11 Language structure (tooling-delta.md §4 C11)
 # --------------------------------------------------------------------------
 
 
-class TestC11GuidanceLayer(CheckTestCase):
+class TestC11LanguageStructure(CheckTestCase):
     def test_pass_full_guidance_layer(self):
         self.assertPass("C11", full_guidance_tree())
 
     def test_pass_partial_guidance_layer(self):
-        # C11 only looks at guidance files that already exist.
-        self.assertPass("C11", {".github/README.md": guidance_home()})
+        # C11 only looks at guidance files that already exist. README.md's
+        # selector line points at README.zh-CN.md, so that sibling must be
+        # present too for mutual reachability (assertion 3) to hold.
+        self.assertPass(
+            "C11",
+            {
+                ".github/README.md": guidance_home(),
+                ".github/README.zh-CN.md": guidance_home_zh(),
+            },
+        )
 
     def test_pass_guidance_layer_with_project_files_present(self):
         files = clean_project_tree()
         files.update(full_guidance_tree())
         self.assertPass("C11", files)
 
+    def test_pass_selector_demo_inside_fenced_code_block_is_ignored(self):
+        # tooling-delta.md §8.2: GUIDE.md's "Translating your own README"
+        # section shows the language-selector lines verbatim inside a
+        # fenced code block. That is example text for the reader to copy,
+        # not this document's own language entry, so it must not FAIL.
+        self.assertPass("C11", {".github/chefs-pick/GUIDE.md": guidance_guide()})
+
+    def test_pass_selector_demo_inside_tilde_fenced_code_block_is_ignored(self):
+        # FIXED (Finding 5): ``_strip_fenced_code`` used to recognise only
+        # backtick fences. The same "Translating your own README" demo,
+        # fenced with ``~~~`` instead, must be ignored exactly like the
+        # backtick-fenced version is.
+        self.assertPass(
+            "C11", {".github/chefs-pick/GUIDE.md": guidance_guide_tilde()}
+        )
+
+    # -- 1. Purity ---------------------------------------------------------
+
+    def test_fail_purity_english_body_contains_chinese(self):
+        files = full_guidance_tree()
+        files[".github/README.md"] = guidance_home().replace(
+            "This template gives your project a full set of starter files.",
+            "This template gives your project 一些中文文字 a full set of starter files.",
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/README.md" in p and "purity" in p for p in problems),
+            f"expected a purity problem naming .github/README.md: {problems}",
+        )
+
+    def test_fail_purity_chinese_translation_has_six_english_words(self):
+        files = full_guidance_tree()
+        files[".github/README.zh-CN.md"] = guidance_home_zh().replace(
+            "相关说明文字。",
+            "相关说明文字 This is a long run of english words here now.",
+            1,
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/README.zh-CN.md" in p and "purity" in p for p in problems),
+            f"expected a purity problem naming .github/README.zh-CN.md: {problems}",
+        )
+
+    # -- 2. Language selector ------------------------------------------------
+
+    def test_fail_language_entry_missing(self):
+        files = full_guidance_tree()
+        files[".github/README.md"] = guidance_home().replace(
+            "**English** · [简体中文](README.zh-CN.md)\n\n", "", 1
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/README.md" in p and "language selector" in p for p in problems),
+            f"expected a language-selector problem naming .github/README.md: {problems}",
+        )
+
+    def test_fail_language_entry_misplaced(self):
+        files = full_guidance_tree()
+        # An extra blank line between the H1 and the selector line breaks
+        # the "exactly one blank line after the H1" rule.
+        files[".github/README.md"] = guidance_home().replace(
+            f"{ct.GUIDANCE_HOME_TITLE}\n\n**English**",
+            f"{ct.GUIDANCE_HOME_TITLE}\n\n\n**English**",
+            1,
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/README.md" in p and "language selector" in p for p in problems),
+            f"expected a language-selector problem naming .github/README.md: {problems}",
+        )
+
+    def test_fail_language_entry_leaks_into_non_translated_doc(self):
+        files = full_guidance_tree()
+        # A real (non-fenced) link to the Chinese translation inside
+        # GUIDE.md, which is not one of the translated documents.
+        files[".github/chefs-pick/GUIDE.md"] = guidance_guide() + (
+            "\nSee the [Chinese translation](README.zh-CN.md) for more.\n"
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/chefs-pick/GUIDE.md" in p and "language selector" in p for p in problems),
+            f"expected a language-selector problem naming GUIDE.md: {problems}",
+        )
+
+    # -- 4. Anchors ----------------------------------------------------------
+
+    def test_fail_anchor_sequence_does_not_match(self):
+        files = full_guidance_tree()
+        files[".github/README.md"] = guidance_home().replace(
+            "<!-- anchor: required -->", "<!-- anchor: requirements-typo -->", 1
+        )
+        problems = self.assertFail("C11", files)
+        # SC-013: the report must name both the offending translation file
+        # and the specific anchor id, not just say "anchors are wrong".
+        self.assertTrue(
+            any(
+                ".github/README.md" in p and "requirements-typo" in p
+                for p in problems
+            ),
+            f"expected a problem naming both the file and the bad anchor id: {problems}",
+        )
+
+    def test_fail_anchor_count_does_not_match_heading_count(self):
+        files = full_guidance_tree()
+        # Drop one anchor line, leaving its heading without an anchor
+        # directly above it.
+        files[".github/README.md"] = guidance_home().replace(
+            "<!-- anchor: license -->\n", "", 1
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/README.md" in p and "anchor" in p for p in problems),
+            f"expected an anchors problem naming .github/README.md: {problems}",
+        )
+
+    # -- 5. Normative-version notice ------------------------------------------
+
+    def test_fail_translation_missing_normative_notice(self):
+        files = full_guidance_tree()
+        notice = (
+            "> 英文版是规范版本。本页与 [README.md](README.md) 不一致时，"
+            "以英文版为准。"
+        )
+        files[".github/README.zh-CN.md"] = guidance_home_zh().replace(
+            f"{notice}\n\n", "", 1
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(".github/README.zh-CN.md" in p and "normative" in p for p in problems),
+            f"expected a normative-notice problem naming .github/README.zh-CN.md: {problems}",
+        )
+
+    # -- 7. Single-source markers ---------------------------------------------
+
+    def test_fail_translation_contains_single_source_marker(self):
+        files = full_guidance_tree()
+        files[".github/README.zh-CN.md"] = guidance_home_zh() + (
+            "\n| Placeholder | Meaning | Files | Example |\n"
+        )
+        problems = self.assertFail("C11", files)
+        self.assertTrue(
+            any(
+                ".github/README.zh-CN.md" in p and "single source" in p
+                for p in problems
+            ),
+            f"expected a single-source problem naming .github/README.zh-CN.md: {problems}",
+        )
+
+    # -- 6, 8, 9, 10: preserved assertions -------------------------------------
+
     def test_fail_home_title_not_verbatim(self):
         files = full_guidance_tree()
-        files[".github/README.md"] = guidance_home(title="# Chef's Pick OSS Starter")
+        files[".github/README.md"] = guidance_home().replace(
+            ct.GUIDANCE_HOME_TITLE, "# Chef's Pick OSS Starter Template", 1
+        )
         self.assertFail("C11", files)
 
     def test_fail_home_missing_cleanup_command(self):
@@ -324,69 +546,12 @@ class TestC11GuidanceLayer(CheckTestCase):
         )
         self.assertFail("C11", files)
 
-    def test_fail_home_missing_feedback_heading(self):
-        files = full_guidance_tree()
-        files[".github/README.md"] = guidance_home().replace(
-            "## 反馈与联系 / Feedback and contact", "## 反馈 / Feedback"
-        )
-        self.assertFail("C11", files)
-
-    def test_fail_english_only_heading_in_guidance_markdown(self):
-        files = full_guidance_tree()
-        files[".github/chefs-pick/MAINTAINING.md"] = (
-            "# 维护说明 / Maintaining\n"
-            "\n"
-            "## Review cadence\n"
-            "\n"
-            "至少每 6 个月复核一次。 / Review at least every 6 months.\n"
-        )
-        problems = self.assertFail("C11", files)
-        self.assertTrue(
-            any("MAINTAINING" in p for p in problems),
-            f"expected the offending file to be named: {problems}",
-        )
-
-    def test_pass_version_heading_is_exempt_from_the_bilingual_rule(self):
+    def test_fail_template_changelog_without_version_heading(self):
         files = full_guidance_tree()
         files[".github/chefs-pick/CHANGELOG.md"] = (
-            "# 模板变更记录 / Template changelog\n"
+            "# Template changelog\n"
             "\n"
-            "本文件记录模板自身的变更。 / Changes to the template itself.\n"
-            "\n"
-            "## [Unreleased]\n"
-            "\n"
-            "## [1.0.0] - 2026-10-01\n"
-            "\n"
-            "### 新增 / Added\n"
-            "\n"
-            "- 首个版本。 / First version.\n"
-        )
-        self.assertPass("C11", files)
-
-    def test_fail_guide_missing_m07(self):
-        files = full_guidance_tree()
-        files[".github/chefs-pick/GUIDE.md"] = guidance_guide(skip=("M07",))
-        self.assertFail("C11", files)
-
-    def test_fail_guide_missing_extra_heading(self):
-        files = full_guidance_tree()
-        files[".github/chefs-pick/GUIDE.md"] = guidance_guide().replace(
-            "## 固定动作版本 / Pinning actions", "## 动作 / Actions"
-        )
-        self.assertFail("C11", files)
-
-    def test_fail_setup_missing_a_step(self):
-        files = full_guidance_tree()
-        files[".github/chefs-pick/SETUP.md"] = guidance_setup().replace(
-            "| S07 | 必做 / Required | 第 7 步 / Step 7 | 确认 / Verify 7 |\n", ""
-        )
-        self.assertFail("C11", files)
-
-    def test_fail_setup_missing_placeholder_table_header(self):
-        files = full_guidance_tree()
-        files[".github/chefs-pick/SETUP.md"] = guidance_setup().replace(
-            ct.PLACEHOLDER_TABLE_HEADER,
-            "| 占位符 | 含义 | 出现的文件 | 示例 |",
+            "This file records changes to the template itself.\n"
         )
         self.assertFail("C11", files)
 
@@ -398,22 +563,17 @@ class TestC11GuidanceLayer(CheckTestCase):
         )
         self.assertFail("C11", files)
 
-    def test_fail_template_changelog_without_version_heading(self):
-        files = full_guidance_tree()
-        files[".github/chefs-pick/CHANGELOG.md"] = (
-            "# 模板变更记录 / Template changelog\n"
-            "\n"
-            "本文件记录模板自身的变更。 / Changes to the template itself.\n"
-        )
-        self.assertFail("C11", files)
+    # -- scope and skip --------------------------------------------------------
 
     def test_files_option_limits_the_scope(self):
         files = full_guidance_tree()
-        files[".github/chefs-pick/GUIDE.md"] = guidance_guide(skip=("M07",))
-        # Out of scope: GUIDE.md is broken but not selected.
+        files[".github/chefs-pick/CHANGELOG.md"] = (
+            "# Template changelog\n\nNo version heading here.\n"
+        )
+        # Out of scope: the broken CHANGELOG.md is not selected.
         self.assertPass("C11", files, files={".github/README.md"})
-        # In scope: the same tree fails once GUIDE.md is selected.
-        self.assertFail("C11", files, files={".github/chefs-pick/GUIDE.md"})
+        # In scope: the same tree fails once CHANGELOG.md is selected.
+        self.assertFail("C11", files, files={".github/chefs-pick/CHANGELOG.md"})
 
     def test_skip_when_no_guidance_files_exist(self):
         status, reason = self.check("C11", clean_project_tree())

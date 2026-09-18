@@ -3,7 +3,8 @@
 Contract: ``specs/001-chefs-pick-starter/contracts/tooling.md`` §1.3 C12 and §3;
 ``specs/001-chefs-pick-starter/contracts/guidance-layer.md`` §1 §4.1 §4.2 §4.3
 §4.4 §4.5; ``specs/001-chefs-pick-starter/data-model.md`` (AdoptionEvidence,
-SelectionDecision).
+SelectionDecision); ``specs/002-english-first-docs/contracts/tooling-delta.md``
+§2 §4 (English-only field labels, level values, evidence types and headings).
 
 Every fixture is built by :func:`build`, so each failing case differs from the
 passing one in exactly one place.
@@ -49,22 +50,22 @@ RELEASE_STALE = "2026-08-01"
 MODULE_IDS = [f"M{i:02d}" for i in range(1, 17)]
 
 MODULE_TITLES = {
-    "M01": "项目说明 / README",
-    "M02": "许可证 / License",
-    "M03": "忽略规则 / Ignore rules",
-    "M04": "行为准则 / Code of Conduct",
-    "M05": "贡献指南 / Contributing guide",
-    "M06": "安全策略 / Security policy",
-    "M07": "Issue 表单 / Issue forms",
-    "M08": "合并请求模板 / Pull request template",
-    "M09": "变更日志与发布说明 / Changelog & release notes",
-    "M10": "变更日志自动化 / Changelog automation",
-    "M11": "自动检查 / Continuous integration",
-    "M12": "依赖自动更新 / Dependency updates",
-    "M13": "编辑器格式配置 / EditorConfig",
-    "M14": "提交前检查 / Pre-commit hooks",
-    "M15": "代码负责人 / Code owners",
-    "M16": "赞助入口 / Funding",
+    "M01": "README",
+    "M02": "License",
+    "M03": "Ignore rules",
+    "M04": "Code of Conduct",
+    "M05": "Contributing guide",
+    "M06": "Security policy",
+    "M07": "Issue forms",
+    "M08": "Pull request template",
+    "M09": "Changelog & release notes",
+    "M10": "Changelog automation",
+    "M11": "Continuous integration",
+    "M12": "Dependency updates",
+    "M13": "EditorConfig",
+    "M14": "Pre-commit hooks",
+    "M15": "Code owners",
+    "M16": "Funding",
 }
 
 # guidance-layer §4.2: only the four registered level values may appear.
@@ -89,7 +90,7 @@ PLATFORM_ONLY = {"M06", "M15"}
 # say so.  Rule "1 + 2" does not claim it and must not be failed for it.
 DEFAULT_RULES = {"M12": "2"}
 
-COMPARABLE = "认可度相当"
+COMPARABLE = "comparable adoption"
 
 
 def repo_slug(mid: str) -> str:
@@ -115,7 +116,7 @@ def star_ref(mid: str) -> str:
 
 # guidance-layer §4.1: the excluded list needs at least 8 rows.
 EXCLUDED = [
-    (f"候选 {j:02d} / Candidate {j:02d}", f"owner/ex{j:02d}", 2000 + j * 7)
+    (f"Candidate {j:02d}", f"owner/ex{j:02d}", 2000 + j * 7)
     for j in range(1, 9)
 ]
 
@@ -126,27 +127,18 @@ ALL_ROWS = [
 
 def default_evidence(mid: str) -> str:
     if mid in PLATFORM_ONLY:
-        return "平台官方功能 / Official platform feature：GitHub 内置功能"
-    return f"精确 Star 数 / Exact stars：{star_ref(mid)}"
+        return "Official platform feature: GitHub built-in feature"
+    return f"Exact stars: {star_ref(mid)}"
 
 
 def default_adoption(mid: str) -> str:
-    """The 认可度 column of the home summary table (guidance-layer §4.5)."""
+    """The Adoption column of the home summary table (guidance-layer §4.5)."""
     if mid in PLATFORM_ONLY:
-        return "平台官方功能 / Official platform feature"
+        return "Official platform feature"
     return star_ref(mid)
 
 
-def default_rationale_zh(mid: str) -> str:
-    if DEFAULT_RULES.get(mid) == "2":
-        return (
-            f"{mid}：两个候选都是事实标准，{COMPARABLE}；"
-            "选定来源由平台内置，不需要额外安装，起步更容易。"
-        )
-    return f"{mid}：社区认可度明显领先于其他候选，开箱即用。"
-
-
-def default_rationale_en(mid: str) -> str:
+def default_rationale(mid: str) -> str:
     if DEFAULT_RULES.get(mid) == "2":
         return (
             "Both candidates are de facto standards with comparable adoption; "
@@ -159,13 +151,9 @@ def default_alternatives(mid: str) -> list[str]:
     if mid == "M01":
         name, slug, stars = EXCLUDED[0]
         return [
-            f"{name} — 精确 Star 数 / Exact stars：★ {fmt(stars)} ({slug}) — "
-            "更新已经停滞（中文） / no longer maintained (English)"
+            f"{name} — Exact stars: ★ {fmt(stars)} ({slug}) — no longer maintained"
         ]
-    return [
-        f"备选 {mid} / Alternative {mid} — 未取得 / Not available — "
-        "需要额外依赖（中文） / needs an extra dependency (English)"
-    ]
+    return [f"Alternative {mid} — Not available — needs an extra dependency"]
 
 
 # --------------------------------------------------------------------------
@@ -176,37 +164,34 @@ def default_alternatives(mid: str) -> list[str]:
 def module_section(mid: str, overrides: dict, verified: str) -> str:
     """One ``### Mxx`` section: field table plus rationale and alternatives."""
     fields = [
-        ("文件 / Files", f"`file-{mid.lower()}.md`"),
-        ("级别 / Level", overrides.get("level", DEFAULT_LEVELS[mid])),
-        ("选定来源 / Pick", f"[Pick {mid}](https://example.com/{mid.lower()})"),
-        ("版本或提交 / Version", f"{repo_slug(mid)}@0123abc"),
-        ("上游许可证 / Upstream license", "MIT"),
-        ("认可度证据 / Evidence", overrides.get("evidence", default_evidence(mid))),
-        ("取舍规则 / Rule", overrides.get("rule", DEFAULT_RULES.get(mid, "1"))),
-        ("核实日期 / Verified", overrides.get("verified", verified)),
+        ("Files", f"`file-{mid.lower()}.md`"),
+        ("Level", overrides.get("level", DEFAULT_LEVELS[mid])),
+        ("Pick", f"[Pick {mid}](https://example.com/{mid.lower()})"),
+        ("Version", f"{repo_slug(mid)}@0123abc"),
+        ("Upstream license", "MIT"),
+        ("Evidence", overrides.get("evidence", default_evidence(mid))),
+        ("Rule", overrides.get("rule", DEFAULT_RULES.get(mid, "1"))),
+        ("Verified", overrides.get("verified", verified)),
     ]
     dropped = set(overrides.get("drop_fields", ()))
     rows = "\n".join(
         f"| {label} | {value} |" for label, value in fields if label not in dropped
     )
 
-    rationale_zh = overrides.get("rationale_zh", default_rationale_zh(mid))
-    rationale_en = overrides.get("rationale_en", default_rationale_en(mid))
+    rationale = overrides.get("rationale", default_rationale(mid))
     alternatives = overrides.get("alternatives", default_alternatives(mid))
     alt_block = "\n".join(f"- {item}" for item in alternatives)
 
     return (
         f"### {mid} {MODULE_TITLES[mid]}\n"
         "\n"
-        "| 字段 / Field | 内容 / Value |\n"
+        "| Field | Value |\n"
         "|---|---|\n"
         f"{rows}\n"
         "\n"
-        f"**入选理由**：{rationale_zh}\n"
+        f"**Rationale**: {rationale}\n"
         "\n"
-        f"**Rationale**: {rationale_en}\n"
-        "\n"
-        "**备选方案 / Alternatives**\n"
+        "**Alternatives**\n"
         "\n"
         f"{alt_block}\n"
     )
@@ -239,13 +224,13 @@ def adoption_table(
 
 def excluded_section(*, rows: int, blank_cell: bool) -> str:
     lines = [
-        "## 排除的候选 / Excluded candidates",
+        "## Excluded candidates",
         "",
-        "| 候选 / Candidate | 认可度 / Adoption | 排除理由 / Reason |",
+        "| Candidate | Adoption | Reason |",
         "|---|---|---|",
     ]
     for index, (name, slug, stars) in enumerate(EXCLUDED[:rows]):
-        reason = "需要额外的在线服务 / depends on an extra hosted service"
+        reason = "depends on an extra hosted service"
         if blank_cell and index == 0:
             reason = ""
         lines.append(f"| {name} | ★ {fmt(stars)} ({slug}) | {reason} |")
@@ -265,22 +250,21 @@ def sources_md(
     include_excluded: bool,
     short_table_row: bool,
 ) -> str:
-    head = ["# 选型清单 / Selection list", ""]
+    head = ["# Selection list", ""]
     if data_verified is not None:
-        head += [f"数据核实日期 / Data verified: {data_verified}", ""]
+        head += [f"Data verified: {data_verified}", ""]
     head += [
-        "## 选型规则 / Selection rules",
+        "## Selection rules",
         "",
-        "三级规则：1 只看认可度；2 认可度相当时看起步难度；3 同样合格时看作者偏好。",
-        "Three rules: 1 adoption alone; 2 ease of starting; 3 the author's preference.",
+        "Three rules: 1 adoption alone; 2 ease of starting when adoption is "
+        "comparable; 3 the author's preference when otherwise equally qualified.",
         "",
-        "证据类型 / Evidence types：精确 Star 数 / Exact stars、四舍五入 Star 数 / "
-        "Rounded stars、估算使用人数 / Estimated users、平台官方功能 / Official "
-        "platform feature、事实标准 / De facto standard、未取得 / Not available。",
+        "Evidence types: Exact stars, Rounded stars, Estimated users, Official "
+        "platform feature, De facto standard, Not available.",
         "",
-        "复核周期 / Review cadence：至少每 6 个月一次，每次发布前也要复核。",
+        "Review cadence: at least every 6 months, and before every release.",
         "",
-        "## 模块 / Modules",
+        "## Modules",
         "",
         "",
     ]
@@ -295,7 +279,7 @@ def sources_md(
     if include_excluded:
         tail += [excluded_section(rows=excluded_rows, blank_cell=excluded_blank), ""]
     tail += [
-        "## 认可度数据 / Adoption data",
+        "## Adoption data",
         "",
         adoption_table(
             table_verified=table_verified,
@@ -304,9 +288,8 @@ def sources_md(
             short_row=short_table_row,
         ),
         "",
-        "## 数据说明 / About the data",
+        "## About the data",
         "",
-        "数据取自 GitHub API，Star 数为精确值。维护说明见 `MAINTAINING.md`。",
         "Data comes from the GitHub API; star counts are exact. "
         "See `MAINTAINING.md` for the maintenance notes.",
         "",
@@ -325,17 +308,15 @@ def home_readme(
     lines = [
         ct.GUIDANCE_HOME_TITLE,
         "",
-        "每个模块都选用社区公认的佼佼者。",
-        "",
         "Every module uses a widely adopted community pick.",
         "",
-        "## 主厨精选一览 / The picks at a glance",
+        "## The picks at a glance",
         "",
         ct.SUMMARY_START,
     ]
     if summary_header:
         lines += [
-            "| 模块 / Module | 选定来源 / Pick | 认可度 / Adoption | 核实日期 / Verified |",
+            "| Module | Pick | Adoption | Verified |",
             "|---|---|---|---|",
         ]
     for mid in summary_order:
@@ -346,24 +327,24 @@ def home_readme(
     lines.append(ct.SUMMARY_END)
     lines.append("")
     if link_to_sources:
-        lines.append("[完整选型清单 / Full selection list](chefs-pick/SOURCES.md)")
+        lines.append("[Full selection list](chefs-pick/SOURCES.md)")
     else:
-        lines.append("完整清单尚未链接 / The full list is not linked yet.")
+        lines.append("The full list is not linked yet.")
     lines.append("")
     return "\n".join(lines)
 
 
 def upgrade_md(*, stars: int) -> str:
     return (
-        "# 升级为团队项目 / Growing into a team project\n"
+        "# Growing into a team project\n"
         "\n"
-        "可选参考。 / An optional reference.\n"
+        "An optional reference.\n"
         "\n"
-        "## 常用增强项 / Common additions\n"
+        "## Common additions\n"
         "\n"
-        "| 增强项 / Addition | 作用 / Purpose | 来源 / Source | 认可度 / Adoption |\n"
+        "| Addition | Purpose | Source | Adoption |\n"
         "|---|---|---|---|\n"
-        f"| Pick M01 | 参考 / Reference | https://github.com/{repo_slug('M01')} | "
+        f"| Pick M01 | Reference | https://github.com/{repo_slug('M01')} | "
         f"★ {fmt(stars)} ({repo_slug('M01')}) |\n"
     )
 
@@ -475,18 +456,14 @@ class TestC12Passes(CheckTestCase):
     def test_rule_one_plus_two_needs_no_comparable_adoption_wording(self):
         """data-model.md: ``1 + 2`` does not claim comparable adoption.
 
-        Only a bare ``2`` must justify 认可度相当, so this must not be failed
-        together with the bare-``2`` case.
+        Only a bare ``2`` must justify the wording, so this must not be
+        failed together with the bare-``2`` case.
         """
         tree = build(
             modules={
                 "M04": {
                     "rule": "1 + 2",
-                    "rationale_zh": (
-                        "M04：第 1 级已经能决定，认可度明显领先；"
-                        "第 2 级也指向同一选择，起步更容易。"
-                    ),
-                    "rationale_en": (
+                    "rationale": (
                         "Rule 1 already decides it, and rule 2 points the same way."
                     ),
                 }
@@ -541,11 +518,7 @@ class TestC12Failures(CheckTestCase):
         self.assertFail(
             build(
                 modules={
-                    "M03": {
-                        "evidence": (
-                            "精确 Star 数 / Exact stars：★ 99,999 (owner/repo03)"
-                        )
-                    }
+                    "M03": {"evidence": "Exact stars: ★ 99,999 (owner/repo03)"}
                 }
             )
         )
@@ -554,11 +527,7 @@ class TestC12Failures(CheckTestCase):
         self.assertFail(
             build(
                 modules={
-                    "M03": {
-                        "evidence": (
-                            "精确 Star 数 / Exact stars：★ 10,333 (owner/not-listed)"
-                        )
-                    }
+                    "M03": {"evidence": "Exact stars: ★ 10,333 (owner/not-listed)"}
                 }
             )
         )
@@ -577,19 +546,22 @@ class TestC12Failures(CheckTestCase):
         self.assertFail(build(modules={"M09": {"omit": True}}))
 
     def test_level_value_is_not_one_of_the_registered_four(self):
-        self.assertFail(build(modules={"M05": {"level": "很棒 / Great"}}))
+        self.assertFail(build(modules={"M05": {"level": "Fantastic"}}))
 
     def test_verified_cell_is_not_a_date(self):
-        self.assertFail(build(modules={"M05": {"verified": "soon / 待定"}}))
+        self.assertFail(build(modules={"M05": {"verified": "soon"}}))
 
     def test_evidence_cell_has_no_registered_evidence_type(self):
         self.assertFail(
-            build(modules={"M03": {"evidence": "很多人用：★ 10,333 (owner/repo03)"}})
+            build(
+                modules={
+                    "M03": {"evidence": "Lots of people use it: ★ 10,333 (owner/repo03)"}
+                }
+            )
         )
 
     def test_rationale_paragraphs_and_alternatives_must_not_be_empty(self):
-        self.assertFail(build(modules={"M08": {"rationale_zh": ""}}))
-        self.assertFail(build(modules={"M08": {"rationale_en": ""}}))
+        self.assertFail(build(modules={"M08": {"rationale": ""}}))
         self.assertFail(build(modules={"M08": {"alternatives": []}}))
 
     # -- archived pick -----------------------------------------------------
@@ -610,8 +582,8 @@ class TestC12Failures(CheckTestCase):
     def test_dates_older_than_183_days_fail(self):
         """All four freshness-constrained fields, one at a time."""
         cases = {
-            "数据核实日期 / Data verified": {"data_verified": STALE},
-            "核实日期 / Verified cell": {"field_verified": STALE},
+            "Data verified": {"data_verified": STALE},
+            "Verified cell": {"field_verified": STALE},
             "adoption table Verified column": {"table_verified": STALE},
             "summary table Verified column": {"summary_verified": STALE},
         }
@@ -622,8 +594,8 @@ class TestC12Failures(CheckTestCase):
     def test_release_mode_rejects_dates_older_than_30_days(self):
         """Within 183 days, so only ``--release`` may reject it."""
         cases = {
-            "数据核实日期 / Data verified": {"data_verified": RELEASE_STALE},
-            "核实日期 / Verified cell": {"field_verified": RELEASE_STALE},
+            "Data verified": {"data_verified": RELEASE_STALE},
+            "Verified cell": {"field_verified": RELEASE_STALE},
             "adoption table Verified column": {"table_verified": RELEASE_STALE},
             "summary table Verified column": {"summary_verified": RELEASE_STALE},
         }
@@ -662,13 +634,12 @@ class TestC12Failures(CheckTestCase):
     # -- rule 2 ------------------------------------------------------------
 
     def test_rule_two_without_the_comparable_adoption_wording(self):
-        """Constitution principle II: a bare ``2`` must justify 认可度相当."""
+        """A bare ``2`` must justify comparable adoption in its Rationale."""
         tree = build(
             modules={
                 "M12": {
                     "rule": "2",
-                    "rationale_zh": "M12：选定来源由平台内置，不需要额外安装，起步更容易。",
-                    "rationale_en": (
+                    "rationale": (
                         "The pick is built into the platform and needs no installation."
                     ),
                 }
@@ -677,6 +648,27 @@ class TestC12Failures(CheckTestCase):
         self.assertNotIn(
             COMPARABLE,
             tree[f"{ct.GUIDANCE_DIR}/SOURCES.md"].split("### M12")[1].split("### M13")[0],
+        )
+        self.assertFail(tree)
+
+    def test_rule_two_rationale_missing_comparable_adoption_phrase_fails(self):
+        """tooling-delta.md §4 C12: rule 2 with no 'comparable adoption' text.
+
+        A different module from ``test_rule_two_without_the_comparable_adoption_wording``,
+        forced into rule 2 with a Rationale that never claims comparable
+        adoption, must also fail.
+        """
+        tree = build(
+            modules={
+                "M07": {
+                    "rule": "2",
+                    "rationale": "The maintainers simply prefer this tool.",
+                }
+            }
+        )
+        self.assertNotIn(
+            COMPARABLE,
+            tree[f"{ct.GUIDANCE_DIR}/SOURCES.md"].split("### M07")[1].split("### M08")[0],
         )
         self.assertFail(tree)
 

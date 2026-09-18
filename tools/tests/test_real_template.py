@@ -50,3 +50,51 @@ class RealTemplateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RefreshPatternsMatchRealTemplateTests(unittest.TestCase):
+    """``verify_sources.py``'s date patterns must match the real ``SOURCES.md``.
+
+    These two patterns are string-matched against the labels actually written
+    in the template.  When the guidance layer was converted to English the
+    labels changed, but the patterns still demanded the old bilingual text, so
+    ``--write`` refreshed every adoption figure while silently leaving all 17
+    dates stale -- and the release gate would then reject data that had just
+    been refreshed.  Nothing caught it, because the unit-test fixtures still
+    carried the old bilingual labels too: the tests agreed with each other and
+    with nothing else.  This test compares the patterns against the real file
+    so the fixtures can never drift away from reality again.
+    """
+
+    def setUp(self) -> None:
+        sources = TEMPLATE_DIR / ".github/chefs-pick/SOURCES.md"
+        if not sources.is_file():
+            self.skipTest("template/ has no SOURCES.md yet")
+        self.text = sources.read_text(encoding="utf-8")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        import verify_sources  # noqa: PLC0415
+
+        self.verify_sources = verify_sources
+
+    def test_data_verified_line_is_matched(self) -> None:
+        found = self.verify_sources.DATA_VERIFIED_RE.findall(self.text)
+        self.assertEqual(
+            len(found),
+            1,
+            "DATA_VERIFIED_RE no longer matches the 'Data verified:' line in "
+            "the real SOURCES.md; a refresh would leave that date stale",
+        )
+
+    def test_every_module_verified_cell_is_matched(self) -> None:
+        import re
+
+        actual = len(re.findall(r"\|\s*Verified\s*\|\s*\d{4}-\d{2}-\d{2}\s*\|", self.text))
+        matched = len(self.verify_sources.VERIFIED_CELL_RE.findall(self.text))
+        self.assertGreater(actual, 0, "the real SOURCES.md has no Verified cells")
+        self.assertEqual(
+            matched,
+            actual,
+            "VERIFIED_CELL_RE matches "
+            f"{matched} of the {actual} module Verified cells in the real "
+            "SOURCES.md; a refresh would leave the unmatched ones stale",
+        )

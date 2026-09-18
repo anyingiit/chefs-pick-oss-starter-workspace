@@ -16,7 +16,7 @@
 | 步骤 | 命令 | 期望结果 | 覆盖 |
 |---|---|---|---|
 | A1 单元测试 | `python3 -m unittest discover -s tools/tests` | `OK`。`template/` 尚未完成时，部分测试会显示为 skipped | 工具本身 |
-| A2 结构校验 | `python3 tools/check_template.py` | 最后一行为 `Summary: 22 passed, 0 failed, 0 skipped`；未提供可选的 `UPGRADE-TO-TEAM.md` 时为 `21 passed, 0 failed, 1 skipped`（C19 跳过） | SC-003、SC-006、SC-007、SC-010、SC-012；FR-001 ~ FR-039 的静态部分 |
+| A2 结构校验 | `python3 tools/check_template.py` | 最后一行为 `Summary: 24 passed, 0 failed, 0 warned, 0 skipped`；未提供可选的 `UPGRADE-TO-TEAM.md` 时为 `23 passed, 0 failed, 0 warned, 1 skipped`（C19 跳过） | SC-003、SC-006、SC-007、SC-010、SC-012；FR-001 ~ FR-039 的静态部分 |
 | A3 刷新认可度数据 | `python3 tools/verify_sources.py --write` | 退出码为 0；报告中没有 `ARCHIVED` 或未评估过的 `STALE` 出现在选定来源上 | 宪章原则 III；SC-008 |
 | A4 发布门禁（自动部分） | `python3 tools/check_template.py --release` | 0 项失败 | 宪章发布门禁 1、3、5，以及门禁 2 中"核心要素齐全"的静态部分 |
 | A5 校验耗时 | `time python3 tools/check_template.py` | 实际耗时不超过 5 秒 | plan 的 Performance Goals |

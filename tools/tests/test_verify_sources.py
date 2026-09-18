@@ -97,16 +97,16 @@ def sources_md(rows=None, verified: str = BASE_VERIFIED) -> str:
             "\n"
             "| 字段 / Field | 内容 / Value |\n"
             "|---|---|\n"
-            "| 认可度证据 / Evidence | 精确 Star 数 / Exact stars："
+            "| Evidence | Exact stars: "
             f"★ {row['stars']} ({row['repo']}) |\n"
-            f"| 核实日期 / Verified | {verified} |\n"
+            f"| Verified | {verified} |\n"
         )
     return (
-        "# 选型清单 / Selection list\n"
+        "# Selection list\n"
         "\n"
-        f"数据核实日期 / Data verified: {verified}\n"
+        f"Data verified: {verified}\n"
         "\n"
-        "## 模块 / Modules\n"
+        "## Modules\n"
         "\n"
         + "\n".join(sections)
         + "\n"
@@ -132,7 +132,7 @@ def readme_md(rows=None, verified: str = BASE_VERIFIED) -> str:
         "## 主厨精选一览 / The picks at a glance\n"
         "\n"
         "<!-- summary:start -->\n"
-        "| 模块 / Module | 选定来源 / Pick | 认可度 / Adoption | 核实日期 / Verified |\n"
+        "| Module | Pick | Adoption | Verified |\n"
         "|---|---|---|---|\n"
         f"{summary}\n"
         "<!-- summary:end -->\n"
@@ -187,11 +187,22 @@ class TempTemplateCase(unittest.TestCase):
         }
 
     def run_main(self, *args) -> tuple[int, str]:
-        """Run ``main`` with the temp template dir; return (exit code, output)."""
+        """Run ``main`` with the temp template dir; return (exit code, output).
+
+        ``repo_root()`` is patched to this same temp directory for the
+        duration of the call. ``main()`` resolves the verbatim contract
+        (tooling-delta.md §6) from ``repo_root()``, deliberately independent
+        of ``--template-dir`` -- so without this patch a ``--write`` run
+        here would reach through to the *real* repository's
+        ``specs/001-chefs-pick-starter/contracts/guidance-layer.md`` instead
+        of staying inside the throwaway directory. See
+        ``RealContractUntouchedTests`` for the regression guard.
+        """
         out, err = io.StringIO(), io.StringIO()
         argv = ["--template-dir", str(self.root), "--today", TODAY.isoformat()]
         argv.extend(args)
-        with redirect_stdout(out), redirect_stderr(err):
+        with mock.patch.object(vs, "repo_root", return_value=self.root), \
+                redirect_stdout(out), redirect_stderr(err):
             code = vs.main(argv)
         return code, out.getvalue() + err.getvalue()
 
@@ -266,9 +277,9 @@ class ApplyUpdatesTests(unittest.TestCase):
         sources = self.updated[SOURCES_REL]
         readme = self.updated[README_REL]
         # 1. the "Data verified" line
-        self.assertIn("数据核实日期 / Data verified: 2026-09-18", sources)
+        self.assertIn("Data verified: 2026-09-18", sources)
         # 2. every module field-table "Verified" cell
-        self.assertEqual(sources.count("| 核实日期 / Verified | 2026-09-18 |"), 2)
+        self.assertEqual(sources.count("| Verified | 2026-09-18 |"), 2)
         # 3. the "Verified" column of the adoption data table
         self.assertEqual(sources.count("| no | 2026-09-18 |"), 2)
         # 4. the "Verified" column of the summary table on the home page
@@ -442,7 +453,7 @@ class MainExitCodeTests(TempTemplateCase):
         after = self.snapshot()
         self.assertIn("★ 16,500 (othneildrew/Best-README-Template)", after[SOURCES_REL])
         self.assertIn("★ 176,000 (github/gitignore)", after[README_REL])
-        self.assertIn("数据核实日期 / Data verified: 2026-09-18", after[SOURCES_REL])
+        self.assertIn("Data verified: 2026-09-18", after[SOURCES_REL])
         self.assertIn(
             "| github/gitignore | 176,000 | 82,500 | 2026-08-30 "
             "| CC0-1.0 | no | 2026-09-18 |",
@@ -479,6 +490,148 @@ class GhReadyTests(unittest.TestCase):
         with mock.patch.object(vs.shutil, "which", return_value=None) as which:
             self.assertFalse(vs.gh_ready())
         which.assert_called_once_with("gh")
+
+
+class ReplaceStarRefsTests(unittest.TestCase):
+    """T019: verbatim-contract writing (tooling-delta.md §6) -- ``replace_star_refs``."""
+
+    def test_replaces_a_known_repos_star_count(self) -> None:
+        text = "Before ★ 8,882 (actions/checkout) after."
+        result = vs.replace_star_refs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(result, "Before ★ 9,000 (actions/checkout) after.")
+
+    def test_leaves_an_unlisted_repo_untouched(self) -> None:
+        # guidance-layer.md §0's own worked example uses the literal
+        # "owner/repo" slug, which is not a real repository and never
+        # appears in stars_by_repo -- it must survive verbatim.
+        text = "§0 example: ★ 123 (owner/repo) illustrates the format."
+        result = vs.replace_star_refs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(result, text)
+
+    def test_replaces_every_occurrence_of_the_same_repo(self) -> None:
+        text = (
+            "First: ★ 1 (foo/bar). "
+            "Second: ★ 1 (foo/bar). "
+            "Third: ★ 1 (foo/bar)."
+        )
+        result = vs.replace_star_refs(text, {"foo/bar": "2"})
+        self.assertEqual(result.count("★ 2 (foo/bar)"), 3)
+        self.assertNotIn("★ 1 (foo/bar)", result)
+
+
+class ContractStarDiffsTests(unittest.TestCase):
+    """T019: verbatim-contract drift reporting -- ``contract_star_diffs``."""
+
+    def test_reports_a_repo_whose_star_count_changed(self) -> None:
+        text = "★ 8,882 (actions/checkout) and, separately, ★ 42 (owner/repo)."
+        diffs = vs.contract_star_diffs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(diffs, [("actions/checkout", "8,882", "9,000")])
+
+    def test_empty_when_the_contract_already_matches(self) -> None:
+        text = "★ 9,000 (actions/checkout)"
+        diffs = vs.contract_star_diffs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(diffs, [])
+
+    def test_a_repo_absent_from_stars_by_repo_produces_no_diff(self) -> None:
+        # Same rule as replace_star_refs: an unmatched repo (e.g. the §0
+        # example) is not reported as drift, since it is never rewritten.
+        text = "★ 42 (owner/repo)"
+        diffs = vs.contract_star_diffs(text, {"actions/checkout": "9,000"})
+        self.assertEqual(diffs, [])
+
+
+class MissingContractFileTests(TempTemplateCase):
+    """T019: tooling-delta.md §6 -- a missing verbatim contract is not an error.
+
+    ``main()`` decides whether the contract exists inline (it is not split
+    into a separate helper), so the finest-grained test available is at the
+    ``main()`` level: point ``repo_root()`` at a directory that has no
+    ``specs/001-chefs-pick-starter/contracts/guidance-layer.md`` and confirm
+    the run still succeeds and reports the file as skipped rather than
+    erroring.
+    """
+
+    def test_main_succeeds_and_notes_the_skip_when_the_contract_is_absent(self) -> None:
+        write_template(self.root)
+        fetched = {
+            "othneildrew/Best-README-Template": payload(
+                "othneildrew/Best-README-Template", stars=16_500
+            ),
+            "github/gitignore": payload("github/gitignore", stars=176_000),
+        }
+        with mock.patch.object(
+            vs, "repo_root", return_value=self.root
+        ), mock.patch.object(vs, "gh_ready", return_value=True), mock.patch.object(
+            vs, "fetch_repo", side_effect=lambda slug: fetched[slug]
+        ):
+            code, output = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertIn("note: contract file not found, skipped:", output)
+
+
+class RealContractUntouchedTests(TempTemplateCase):
+    """Regression guard for the test-isolation bug fixed alongside T018/T019.
+
+    ``main()`` deliberately resolves the verbatim contract (§6 of
+    ``specs/002-english-first-docs/contracts/tooling-delta.md``) from
+    ``repo_root()``, independent of ``--template-dir`` -- that part is
+    correct production behaviour. But it means any test that drives
+    ``main(["--write", ...])`` without also pointing ``repo_root()`` at a
+    throwaway directory silently writes through to the *real*
+    ``specs/001-chefs-pick-starter/contracts/guidance-layer.md``. That is
+    exactly what happened before ``TempTemplateCase.run_main`` patched
+    ``repo_root()``: a run using fixture data (``★ 16,500`` /
+    ``★ 176,000``) corrupted the genuine contract file on disk.
+
+    This test exercises the same ``--write`` + contract-present path against
+    a private fixture contract inside ``self.root``, and independently
+    confirms the real repository file was not touched at all -- neither its
+    content nor its mtime. If ``run_main`` (or any future test) ever drops
+    the ``repo_root()`` patch, this is the test that must fail.
+    """
+
+    REAL_CONTRACT = Path(__file__).resolve().parents[2] / vs.CONTRACT_REL
+
+    def test_write_run_leaves_the_real_contract_file_untouched(self) -> None:
+        before_text = self.REAL_CONTRACT.read_text(encoding="utf-8")
+        before_mtime_ns = self.REAL_CONTRACT.stat().st_mtime_ns
+
+        write_template(self.root)
+        # A private fixture contract inside the temp root -- using the same
+        # star counts the real contract happens to hold for these repos, so
+        # a failure to isolate would corrupt the real file the same way the
+        # original bug did.
+        fixture_contract = self.root / vs.CONTRACT_REL
+        fixture_contract.parent.mkdir(parents=True, exist_ok=True)
+        fixture_contract.write_text(
+            "★ 16,360 (othneildrew/Best-README-Template) and "
+            "★ 175,810 (github/gitignore).",
+            encoding="utf-8",
+        )
+
+        fetched = {
+            "othneildrew/Best-README-Template": payload(
+                "othneildrew/Best-README-Template", stars=16_500
+            ),
+            "github/gitignore": payload("github/gitignore", stars=176_000),
+        }
+        with mock.patch.object(vs, "gh_ready", return_value=True), mock.patch.object(
+            vs, "fetch_repo", side_effect=lambda slug: fetched[slug]
+        ):
+            code, _output = self.run_main("--write")
+        self.assertEqual(code, 0)
+
+        # The contract-writing branch did run, against the fixture only.
+        after_fixture = fixture_contract.read_text(encoding="utf-8")
+        self.assertIn("★ 16,500 (othneildrew/Best-README-Template)", after_fixture)
+        self.assertIn("★ 176,000 (github/gitignore)", after_fixture)
+
+        # The real repository contract is byte-for-byte and mtime-for-mtime
+        # unchanged.
+        after_text = self.REAL_CONTRACT.read_text(encoding="utf-8")
+        after_mtime_ns = self.REAL_CONTRACT.stat().st_mtime_ns
+        self.assertEqual(after_text, before_text)
+        self.assertEqual(after_mtime_ns, before_mtime_ns)
 
 
 if __name__ == "__main__":

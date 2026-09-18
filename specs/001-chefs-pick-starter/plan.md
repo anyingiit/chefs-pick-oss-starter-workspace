@@ -37,7 +37,7 @@
 
 **Testing**：
 - `python3 -m unittest discover -s tools/tests`（维护工具的单元测试，含正反例夹具）。分阶段验收时按测试模块名逐个运行，避免把尚未实现的检查所对应的红灯测试计入。
-- `python3 tools/check_template.py`（结构校验，共 22 项）；发布前追加 `--release` 参数。模板尚未完成时，用 `--only` 排除 C01。
+- `python3 tools/check_template.py`（结构校验，共 24 项）；发布前追加 `--release` 参数。模板尚未完成时，用 `--only` 排除 C01。
 - 平台验证由维护者手动完成：发布内容与设置见 quickstart 的 B 部分；发布门禁 2 和 4 要在创建 Release 之前，用从模板生成的测试仓库验证，见 quickstart 的 C 部分。
 
 **Target Platform**：
@@ -61,7 +61,7 @@
 - 模板仓库使用 MIT 许可证，保留上游要求的署名，不给使用者增加额外合规负担。
 
 **Scale/Scope**：
-- 16 个模块（M01–M16），22 项校验（C01–C22）。
+- 16 个模块（M01–M16），24 项校验（C01–C24）。
 - `template/` 下共 26 个文件：18 个项目文件（含 4 个可选文件）和 8 个起步引导层文件（含 1 个可选的团队升级指引）。
 - research §1 追踪 37 个上游仓库，选型清单的认可度数据表收录其中 36 个（`spdx/license-list-data` 不列）；另有 GitHub 平台官方功能等非仓库来源。
 
