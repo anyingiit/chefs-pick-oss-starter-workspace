@@ -1238,9 +1238,9 @@ def check_c11(ctx: Context) -> list[str]:
                     f"sequence\n    expected: {expected_seq}\n    found:    {actual_seq}"
                 )
                 if missing:
-                    message += f"\n    缺少: {missing}"
+                    message += f"\n    missing:    {missing}"
                 if unexpected:
-                    message += f"\n    多出: {unexpected}"
+                    message += f"\n    unexpected: {unexpected}"
                 problems.append(message)
             anchor_line_numbers = {number for number, _id in anchors}
             for number, heading_text in headings:
@@ -1991,7 +1991,7 @@ def check_c23(ctx: Context) -> list[str]:
                     (
                         repo,
                         rel,
-                        f"{rel}: {repo} 记为 {value}，契约记为 {contract_value}",
+                        f"{rel}: {repo} has {value}, contract has {contract_value}",
                     )
                 )
 
@@ -2011,8 +2011,8 @@ def check_c23(ctx: Context) -> list[str]:
                             (
                                 repo,
                                 rel_a,
-                                f"{repo}: {rel_a} 记为 {value_a}，"
-                                f"{rel_b} 记为 {value_b}",
+                                f"{repo}: {rel_a} has {value_a}, "
+                                f"{rel_b} has {value_b}",
                             )
                         )
 
