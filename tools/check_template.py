@@ -1231,10 +1231,17 @@ def check_c11(ctx: Context) -> list[str]:
             expected_seq = ANCHOR_SEQUENCES[key]
             actual_seq = [anchor_id for _n, anchor_id in anchors]
             if actual_seq != expected_seq:
-                problems.append(
+                missing = [a for a in expected_seq if a not in actual_seq]
+                unexpected = [a for a in actual_seq if a not in expected_seq]
+                message = (
                     f"{rel}: anchors: sequence does not match the {key} "
                     f"sequence\n    expected: {expected_seq}\n    found:    {actual_seq}"
                 )
+                if missing:
+                    message += f"\n    缺少: {missing}"
+                if unexpected:
+                    message += f"\n    多出: {unexpected}"
+                problems.append(message)
             anchor_line_numbers = {number for number, _id in anchors}
             for number, heading_text in headings:
                 if (number - 1) not in anchor_line_numbers:
@@ -1934,6 +1941,16 @@ def check_c23(ctx: Context) -> list[str]:
     root (the script's own parent directory's parent), never to
     ``--template-dir``, so this check always looks at the real contract and
     the real template regardless of ``ctx.template_dir``.
+
+    Every ``★ N (owner/repo)`` occurrence is kept, on both sides, as its own
+    ``(file, value)`` pair rather than collapsed into one dict entry per
+    repository -- collapsing would let a later file silently overwrite an
+    earlier file's drifted value and hide it from the comparison. Each
+    template occurrence is compared against the contract's value for that
+    repository, and every disagreement is reported individually. A
+    repository that itself carries more than one distinct value -- within
+    the contract, or within ``template/`` -- is also reported, as an
+    internal self-contradiction, independent of any cross-side comparison.
     """
     repo_root = Path(__file__).resolve().parent.parent
     contract_path = (
@@ -1942,28 +1959,72 @@ def check_c23(ctx: Context) -> list[str]:
     if not contract_path.is_file():
         raise SkipCheck(f"missing {contract_path}")
 
-    contract_stars: dict[str, str] = {}
+    contract_rel = "specs/001-chefs-pick-starter/contracts/guidance-layer.md"
+    contract_stars: dict[str, list[tuple[str, str]]] = {}
     for stars, repo in STAR_RE.findall(read_text(contract_path)):
-        contract_stars[repo] = stars.replace(",", "")
+        contract_stars.setdefault(repo, []).append(
+            (contract_rel, stars.replace(",", ""))
+        )
 
-    template_stars: dict[str, str] = {}
+    template_stars: dict[str, list[tuple[str, str]]] = {}
     template_root = repo_root / "template"
     if template_root.is_dir():
         for rel in iter_files(template_root):
             if not rel.endswith(".md"):
                 continue
             for stars, repo in STAR_RE.findall(read_text(template_root / rel)):
-                template_stars[repo] = stars.replace(",", "")
+                template_stars.setdefault(repo, []).append(
+                    (rel, stars.replace(",", ""))
+                )
 
-    problems = []
+    cross_problems: list[tuple[str, str, str]] = []
     for repo in sorted(set(contract_stars) & set(template_stars)):
-        contract_value = contract_stars[repo]
-        template_value = template_stars[repo]
-        if contract_value != template_value:
-            problems.append(
-                f"{repo}: contract {contract_value} vs template {template_value}"
-            )
-    return problems
+        contract_occurrences = sorted(contract_stars[repo])
+        # When the contract itself disagrees with itself, point 3 below
+        # reports that self-contradiction; use its first (sorted) value as
+        # "the" contract value here so every template occurrence still gets
+        # compared against something concrete.
+        contract_value = contract_occurrences[0][1]
+        for rel, value in sorted(template_stars[repo]):
+            if value != contract_value:
+                cross_problems.append(
+                    (
+                        repo,
+                        rel,
+                        f"{rel}: {repo} 记为 {value}，契约记为 {contract_value}",
+                    )
+                )
+
+    self_problems: list[tuple[str, str, str]] = []
+    for repo in sorted(set(contract_stars) | set(template_stars)):
+        for occurrences in (
+            contract_stars.get(repo, []),
+            template_stars.get(repo, []),
+        ):
+            distinct = sorted(set(occurrences))
+            for i in range(len(distinct)):
+                for j in range(i + 1, len(distinct)):
+                    rel_a, value_a = distinct[i]
+                    rel_b, value_b = distinct[j]
+                    if value_a != value_b:
+                        self_problems.append(
+                            (
+                                repo,
+                                rel_a,
+                                f"{repo}: {rel_a} 记为 {value_a}，"
+                                f"{rel_b} 记为 {value_b}",
+                            )
+                        )
+
+    problems = [text for _repo, _rel, text in sorted(cross_problems)]
+    problems += [text for _repo, _rel, text in sorted(self_problems)]
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for text in problems:
+        if text not in seen:
+            seen.add(text)
+            deduped.append(text)
+    return deduped
 
 
 def check_c24(ctx: Context) -> list[str]:

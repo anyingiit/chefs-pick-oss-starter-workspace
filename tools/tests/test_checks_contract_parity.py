@@ -123,6 +123,87 @@ class TestC23ContractParity(unittest.TestCase):
             status, problems = run_one("C23", make_ctx(fake.root))
         self.assertEqual(status, "PASS", problems)
 
+    def test_earlier_file_disagreement_not_masked_by_later_agreement(self) -> None:
+        """Regression guard for the fixed dict-collapse bug (see module docstring).
+
+        ``iter_files`` walks ``template/`` in sorted POSIX-path order, and
+        'a' < 'z', so ``template/a-disagrees.md`` is read *before*
+        ``template/z-agrees.md``. Under the old ``dict[str, str]``
+        collection, the dict was keyed by repo slug and each match
+        overwrote the previous one, so the *last* file read for a repo won
+        the dict slot. Here that would have been ``z-agrees.md``, whose
+        value matches the contract -- so the dict would have ended up
+        holding only the agreeing value, the earlier file's drift would
+        never have been compared against anything, and C23 would have
+        wrongly PASSed. The rewritten check keeps every ``(file, value)``
+        occurrence instead of collapsing them, so it must still catch
+        ``a-disagrees.md``'s drift and FAIL, naming that file specifically.
+        """
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    CONTRACT_REL: "See ★ 1,234 (octocat/two-files).\n",
+                    "template/a-disagrees.md": (
+                        "Cited as ★ 999 (octocat/two-files).\n"
+                    ),
+                    "template/z-agrees.md": (
+                        "Cited as ★ 1,234 (octocat/two-files).\n"
+                    ),
+                }
+            )
+            status, problems = run_one("C23", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn("octocat/two-files", joined)
+        # The earlier-sorting file must be the one named as disagreeing --
+        # that is the whole point of no longer collapsing occurrences.
+        self.assertIn("a-disagrees.md", joined)
+        self.assertIn("1234", joined)
+        self.assertIn("999", joined)
+
+    def test_contract_self_contradiction_fails(self) -> None:
+        """The contract disagreeing with itself must FAIL on its own,
+        independent of anything under ``template/``.
+        """
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    CONTRACT_REL: (
+                        "First mention ★ 111 (dup/dup) then later "
+                        "★ 222 (dup/dup).\n"
+                    ),
+                }
+            )
+            status, problems = run_one("C23", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn("dup/dup", joined)
+        self.assertIn("111", joined)
+        self.assertIn("222", joined)
+
+    def test_template_self_contradiction_across_files_fails(self) -> None:
+        """Two ``template/`` files disagreeing on one repo's stars must
+        FAIL on their own, independent of the contract.
+        """
+        with FakeRepoRoot() as fake:
+            fake.write(
+                {
+                    CONTRACT_REL: "See ★ 1 (unrelated/repo).\n",
+                    "template/one.md": (
+                        "Cited as ★ 333 (dup/only-in-template).\n"
+                    ),
+                    "template/two.md": (
+                        "Cited as ★ 444 (dup/only-in-template).\n"
+                    ),
+                }
+            )
+            status, problems = run_one("C23", make_ctx(fake.root))
+        self.assertEqual(status, "FAIL", problems)
+        joined = "\n".join(problems)
+        self.assertIn("dup/only-in-template", joined)
+        self.assertIn("333", joined)
+        self.assertIn("444", joined)
+
     def test_missing_contract_file_skips(self) -> None:
         with FakeRepoRoot() as fake:
             fake.write({"template/GUIDE.md": "Cited as ★ 1 (a/b).\n"})
