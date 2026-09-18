@@ -29,7 +29,8 @@
 
 1. 在 GitHub 上新建公开仓库 `chefs-pick-oss-starter`，默认分支为 `main`。
 2. 把 `template/` 中的内容（包括隐藏文件）作为该仓库 `main` 分支的全部内容，任选一种方式：
-   - **开发工作区已是 Git 仓库时**：先运行 `git subtree split --prefix=template -b publish`，再运行 `git push <模板仓库远程名> publish:main`。
+   - **首次发布到空仓库时**（本步骤只适用于这一种情形）：先运行 `git subtree split --prefix=template -b publish`，再运行 `git push <模板仓库远程名> publish:main`。
+   - **后续发布到已有内容的仓库时**：按仓库根目录 `README.md` 的 `Publishing` 一节操作。绝不要强制推送；subtree split 切出的历史与模板仓库没有共同祖先，强推会让 v1.0.0 标签指向的提交不再可达。
    - **直接复制**：克隆空的模板仓库，把 `template/` 下的所有内容复制进去，然后提交并推送。
    - 两种方式都**不要**把开发工作区中的其他目录推送到模板仓库。
 3. 在仓库设置中完成以下几项：
