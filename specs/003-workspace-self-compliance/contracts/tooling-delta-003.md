@@ -27,7 +27,7 @@ repo_root = Path(__file__).resolve().parent.parent
 
 解析路径，**刻意忽略 `ctx.template_dir`**，并在各自的文档字符串中写明这一点，与 `check_c23` 的写法一致。理由见 research R3：工作区首页不在 `template/` 之下。
 
-`template/` 不存在或工作区首页不存在时，抛 `SkipCheck`，不得 FAIL——与 C23 对缺失契约的处理同口径。
+`template/` 不存在、`README.md` 不存在、**或 `README.zh-CN.md` 不存在**时，C25、C26、C27 三者一律抛 `SkipCheck`，不得 FAIL——与 C23 对缺失契约的处理同口径。译本缺失也要跳过，是因为改造过程中必然出现「英文原文已重写、译本尚未建立」的中间状态（tasks.md 的 T008 与 T009 之间），此时硬失败会把一个预期中的过渡态报成错误。
 
 ## 3. C25 Workspace language structure
 
